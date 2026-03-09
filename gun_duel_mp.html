@@ -818,6 +818,7 @@ function mpConnect() {
     if (msg.type === 'role') {
       mp.role = msg.role
       mp.connected = true
+      console.log('[MP] role assigned:', mp.role)
       if (msg.role === 'host') mpShowOverlay('🤠 You are BILLY\nWaiting for second player...')
       else mpShowOverlay('🔫 You are OUTLAW\nWaiting for host to start...')
       if (msg.role === 'guest') mpStartSendingInputs()
@@ -842,10 +843,16 @@ function mpConnect() {
         mp.guestKeys = msg.keys || {}
         mp.guestAngle = msg.angle ?? 0
         mp.guestFacing = msg.facing ?? -1
+        // Debug: log when any movement key is pressed
+        let gk = mp.guestKeys
+        if (gk['KeyA']||gk['KeyD']||gk['ArrowLeft']||gk['ArrowRight']||gk['Space']||gk['ArrowUp']) {
+          console.log('[HOST] guest keys:', JSON.stringify(gk))
+        }
       }
     }
 
     if (msg.type === 'shoot') {
+      console.log('[HOST] received shoot from guest, enemy exists:', !!enemy, 'gameOver:', gameOver)
       // Host receives shoot request from guest — fire enemy gun
       if (mp.role === 'host' && enemy && !gameOver) {
         shoot(enemy, 'enemy')
@@ -929,14 +936,20 @@ function mpApplyState(s) {
 let mpInputInterval = null
 function mpStartSendingInputs() {
   if (mpInputInterval) clearInterval(mpInputInterval)
+  console.log('[GUEST] starting to send inputs')
   mpInputInterval = setInterval(() => {
     if (!mp.ws || mp.ws.readyState !== 1) return
-    mp.ws.send(JSON.stringify({
+    const payload = {
       type: 'input',
       keys: {...keys},
       angle: enemy?.angle ?? 0,
       facing: enemy?.facing ?? -1
-    }))
+    }
+    // Debug: log when sending movement keys
+    if (keys['KeyA']||keys['KeyD']||keys['ArrowLeft']||keys['ArrowRight']||keys['Space']||keys['ArrowUp']) {
+      console.log('[GUEST] sending keys:', JSON.stringify(keys))
+    }
+    mp.ws.send(JSON.stringify(payload))
   }, 33)
 }
 
