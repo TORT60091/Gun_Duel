@@ -270,7 +270,7 @@ class Particle {
     this.size=type==='spark'?2:3+Math.random()*4
     this.color=col||(type==='spark'?(Math.random()<0.5?'#FFD700':'#FF8C00'):(Math.random()<0.5?'#FF4422':'#FF8844'))
   }
-  update(dt){this.x+=this.dx*dt*timeScale;this.y+=this.dy*dt*timeScale;this.dy+=0.2*dt*timeScale;this.life-=0.045*dt*timeScale}
+  update(dt){this.x+=this.dx*dt*timeScale;this.y+=this.dy*dt*timeScale;this.dy+=0.2*dt*timeScale;this.life-=0.045*dt*timeScale*(isSlowmo?0.2:1)}
   draw(){ctx.globalAlpha=Math.max(0,this.life);ctx.fillStyle=this.color;ctx.fillRect(R(this.x),R(this.y),this.size,this.size);ctx.globalAlpha=1}
 }
 class Flash{
@@ -288,7 +288,7 @@ class Bullet{
   }
   update(dt){
     this.trail.push({x:this.x,y:this.y})
-    if(this.trail.length>9)this.trail.shift()
+    if(this.trail.length>36)this.trail.shift()
     let ts=timeScale*dt
     this.x+=this.dx*ts;this.y+=this.dy*ts
     // wall bounce
@@ -313,14 +313,18 @@ class Bullet{
     for(let c of clouds) if(c.contains(this.x,this.y)) c.addHole(this.x,this.y)
   }
   draw(){
-    for(let i=0;i<this.trail.length;i++){
-      let t=this.trail[i],a=(i/this.trail.length)*0.45
-      ctx.globalAlpha=a;ctx.fillStyle=this.owner==='player'?'#00ffff':'#ff4422'
-      let sz=Math.max(2,R(this.r*(i/this.trail.length)))
+    let col = this.owner==='player' ? '#00ffff' : '#ff4422'
+    let len = this.trail.length
+    for(let i=0;i<len;i++){
+      let t=this.trail[i]
+      let frac=i/len
+      let sz=Math.max(1, this.r * frac)
+      ctx.globalAlpha=frac*0.55
+      ctx.fillStyle=col
       ctx.fillRect(R(t.x-sz/2),R(t.y-sz/2),sz,sz)
     }
     ctx.globalAlpha=1
-    ctx.fillStyle=this.owner==='player'?'#00ffff':'#ff4422'
+    ctx.fillStyle=col
     ctx.fillRect(R(this.x-this.r),R(this.y-this.r),this.r*2,this.r*2)
     ctx.fillStyle=this.owner==='player'?'#ffffff':'#ffaa00'
     ctx.fillRect(R(this.x-2),R(this.y-2),4,4)
@@ -917,10 +921,13 @@ function mpSendState() {
 
 function mpApplyState(s) {
   if (!player || !enemy) return
-  // Apply to player (Billy — host's char, rendered on guest too)
+  // Apply host's player state fully
   Object.assign(player, s.p)
-  // Apply to enemy (Outlaw — guest's char, server-authoritative)
+  // Apply enemy state but preserve local angle/facing — guest controls these directly
+  let localAngle = enemy.angle, localFacing = enemy.facing
   Object.assign(enemy, s.e)
+  enemy.angle = localAngle
+  enemy.facing = localFacing
   gameOver = s.go
   timeScale = s.ts
   slowEnergy = s.se
@@ -1194,7 +1201,11 @@ function bHit(a,b){let dx=a.x-b.x,dy=a.y-b.y;return dx*dx+dy*dy<(a.r+b.r)*(a.r+b
 
 // ── SLOWMO ───────────────────────────────────────────────────
 function updateSlowmo(dt){
-  let active=keys['KeyE']||!player.onGround
+  let active = keys['KeyE'] || !player.onGround
+  // In MP: also activate if guest is jumping or pressing E
+  if (mp.connected && mp.role === 'host' && enemy) {
+    active = active || mp.guestKeys['KeyE'] || !enemy.onGround
+  }
   if(active&&slowEnergy>0){isSlowmo=true;slowEnergy=Math.max(0,slowEnergy-SLOW_DRAIN*dt);timeScale=SLOW_SCALE}
   else{isSlowmo=false;slowEnergy=Math.min(1,slowEnergy+SLOW_REFILL*dt);timeScale=1}
   if(slowEnergy<=0){isSlowmo=false;timeScale=1}
