@@ -715,9 +715,10 @@ class Player{
     let ground=SPRITE_GROUND+this.h*0.55
     if(this.y>=ground){
       this.y=ground
-      if(!this.deadBounced&&this.deadVy>1){
-        this.deadVy=-5
+      if(!this.deadBounced){
         this.deadBounced=true
+        if(this.deadVy>1){ this.deadVy=-5 }
+        else { this.deadVy=0 }
       } else {
         this.deadVy=0
       }
@@ -967,28 +968,35 @@ function mpSendState() {
 
 function mpApplyState(s) {
   if (!player || !enemy) return
-  // Apply host player state — but if dead, only sync ragdoll init fields not position (guest runs ragdoll locally)
+
+  // Player (host's character): apply fully, but once dead keep ragdoll local
   let wasPlayerDead = player.dead
+  let savedP = wasPlayerDead ? {x:player.x,y:player.y,deadVy:player.deadVy,deadAngle:player.deadAngle,deadBounced:player.deadBounced,deadDriftX:player.deadDriftX} : null
   Object.assign(player, s.p)
-  if (wasPlayerDead && player.dead) {
-    // keep local ragdoll position, only sync visual/non-physics fields
+  if (wasPlayerDead && player.dead && savedP) {
+    player.x=savedP.x; player.y=savedP.y
+    player.deadVy=savedP.deadVy; player.deadAngle=savedP.deadAngle
+    player.deadBounced=savedP.deadBounced; player.deadDriftX=savedP.deadDriftX
   }
 
-  // Enemy: preserve angle/facing (guest controls via mouse); if dead let local ragdoll run
+  // Enemy (guest's character): preserve angle/facing + ragdoll once dead
   let localAngle = enemy.angle, localFacing = enemy.facing
   let wasEnemyDead = enemy.dead
+  let savedE = wasEnemyDead ? {x:enemy.x,y:enemy.y,deadVy:enemy.deadVy,deadAngle:enemy.deadAngle,deadBounced:enemy.deadBounced,deadDriftX:enemy.deadDriftX} : null
   Object.assign(enemy, s.e)
   enemy.angle = localAngle
   enemy.facing = localFacing
-  if (wasEnemyDead && enemy.dead) {
-    // keep local ragdoll position
+  if (wasEnemyDead && enemy.dead && savedE) {
+    enemy.x=savedE.x; enemy.y=savedE.y
+    enemy.deadVy=savedE.deadVy; enemy.deadAngle=savedE.deadAngle
+    enemy.deadBounced=savedE.deadBounced; enemy.deadDriftX=savedE.deadDriftX
   }
 
   gameOver = s.go
   timeScale = s.ts
   slowEnergy = s.se
 
-  // Sync bullets — rebuild array with full trail
+  // Sync bullets
   bullets = s.bullets.map(b => {
     let bl = new Bullet(b.x, b.y, 0, b.owner)
     bl.dx = b.dx; bl.dy = b.dy
@@ -996,7 +1004,7 @@ function mpApplyState(s) {
     return bl
   })
 
-  // Sync particles from host
+  // Sync new particles from host
   if (s.particles) {
     for (let sp of s.particles) {
       let p = new Particle(sp.x, sp.y, sp.type || 'spark', sp.color)
