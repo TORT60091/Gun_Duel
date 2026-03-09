@@ -1340,7 +1340,6 @@ function loop(now){
       enemy.angle  = mp.guestAngle
       enemy.facing = mp.guestFacing
       if (!enemy.dead) {
-        // mirror guest key inputs for movement
         let gk = mp.guestKeys
         enemy.moving = false
         if (gk['KeyA']||gk['ArrowLeft'])  { enemy.x -= 4*dt*timeScale; enemy.moving = true }
@@ -1354,6 +1353,7 @@ function loop(now){
         if(enemy.reloading){enemy.reloadTimer-=dt;if(enemy.reloadTimer<=0){enemy.ammo=enemy.maxAmmo;enemy.reloading=false}}
         if(enemy.ammo<=0&&!enemy.reloading){enemy.reloading=true;enemy.reloadTimer=60}
       }
+    } else {
       // single player: normal update + AI
       if(!enemy.dead) enemy.update(dt)
       if(!gameOver && !enemy.dead) enemy.updateAI(dt,player)
