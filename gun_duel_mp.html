@@ -921,25 +921,12 @@ function mpSendState() {
 
 function mpApplyState(s) {
   if (!player || !enemy) return
-  // Apply host's player state fully
   Object.assign(player, s.p)
-  // Apply enemy state but preserve local angle/facing — guest controls these directly
-  // Smoothly lerp position instead of snapping to avoid jitter
+  // Preserve angle/facing — guest controls these locally via mouse
   let localAngle = enemy.angle, localFacing = enemy.facing
-  let localX = enemy.x, localY = enemy.y, localVy = enemy.vy
   Object.assign(enemy, s.e)
   enemy.angle = localAngle
   enemy.facing = localFacing
-  // Lerp position: blend server correction gently (0.3 = 30% snap per frame)
-  let dx = enemy.x - localX, dy = enemy.y - localY
-  let dist = Math.sqrt(dx*dx + dy*dy)
-  if (dist < 80) {
-    // small error — lerp smoothly
-    enemy.x = localX + dx * 0.3
-    enemy.y = localY + dy * 0.3
-    enemy.vy = localVy + (enemy.vy - localVy) * 0.3
-  }
-  // large error (>80px) — snap immediately (teleport/death etc)
   gameOver = s.go
   timeScale = s.ts
   slowEnergy = s.se
@@ -980,7 +967,7 @@ function mpNotifyLevelStart(level) {
     mp.ws.send(JSON.stringify({ type: 'start_level', level }))
     // Begin sending state snapshots
     if (mp.stateInterval) clearInterval(mp.stateInterval)
-    mp.stateInterval = setInterval(mpSendState, 33)  // 30fps
+    mp.stateInterval = setInterval(mpSendState, 16)  // ~60fps fallback
   }
 }
 
@@ -1265,20 +1252,9 @@ function loop(now){
   if(currentLevel===3){ for(let a of aliens){a.update(dt);a.draw()} }
 
   if (mp.connected && mp.role === 'guest') {
-    // Guest: run local prediction for own character (enemy on guest side) to reduce perceived lag
-    if (enemy && !enemy.dead) {
-      enemy.moving = false
-      if (keys['KeyA']||keys['ArrowLeft'])  { enemy.x -= 4*dt*timeScale; enemy.moving = true; enemy.facing = -1 }
-      if (keys['KeyD']||keys['ArrowRight']) { enemy.x += 4*dt*timeScale; enemy.moving = true; enemy.facing = 1 }
-      if ((keys['Space']||keys['ArrowUp']) && enemy.onGround) { enemy.vy = -13; enemy.onGround = false }
-      if (enemy.moving){ enemy.walkTimer+=dt*timeScale; enemy.walkFrame=enemy.walkTimer*0.2 }
-      enemy.vy+=0.65*dt*timeScale; enemy.y+=enemy.vy*dt*timeScale
-      if(enemy.y>=SPRITE_GROUND){enemy.y=SPRITE_GROUND;enemy.vy=0;enemy.onGround=true}
-      enemy.x=Math.max(0,Math.min(W-enemy.w,enemy.x))
-    }
-    // also update bullets locally for smooth rendering
+    // Guest: no position prediction — position comes from host snapshots
+    // Only update bullets/particles locally for smooth rendering between snapshots
     for(let b of bullets) b.update(dt)
-    // update particles/hats/guns visually
     for(let p of particles) p.update(dt)
     particles = particles.filter(p=>p.life>0)
     for(let h of flyingHats) h.update(dt)
@@ -1353,6 +1329,9 @@ function loop(now){
     return true
   })
   } // end host-only physics block
+
+  // Host: send state every frame for minimal latency
+  if (mp.connected && mp.role === 'host') mpSendState()
 
   if (mp.connected && mp.role === 'guest') {
     // already updated in prediction block above — just draw
