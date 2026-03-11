@@ -1440,17 +1440,30 @@ function mpApplyState(s) {
     player.deadBounced=savedP.deadBounced; player.deadDriftX=savedP.deadDriftX
   }
 
-  // Enemy (guest's character): preserve angle/facing/crouching + ragdoll once dead
+  // Enemy = guest's own character.
+  // Don't overwrite position/velocity — guest runs that locally for smooth movement.
+  // Only sync authoritative game-state: lives, ammo, hats, dead, invincible, reload.
   let localAngle = enemy.angle, localFacing = enemy.facing, localCrouching = enemy.crouching
+  let localX = enemy.x, localY = enemy.y, localVy = enemy.vy
+  let localMoving = enemy.moving, localWalkFrame = enemy.walkFrame, localWalkTimer = enemy.walkTimer
+  let localOnGround = enemy.onGround
   let wasEnemyDead = enemy.dead
   let savedE = wasEnemyDead ? {x:enemy.x,y:enemy.y,deadVy:enemy.deadVy,deadAngle:enemy.deadAngle,deadBounced:enemy.deadBounced,deadDriftX:enemy.deadDriftX} : null
   let scaledE = dnChar(s.e)
-  let incomingHatsE = s.e.hats
-  Object.assign(enemy, scaledE)
-  if (incomingHatsE !== undefined) enemy.hats = incomingHatsE
-  enemy.angle = localAngle
-  enemy.facing = localFacing
-  enemy.crouching = localCrouching
+  // apply only non-positional authoritative fields
+  enemy.lives      = scaledE.lives
+  enemy.ammo       = scaledE.ammo
+  enemy.reloading  = scaledE.reloading
+  enemy.reloadTimer= scaledE.reloadTimer
+  enemy.invincible = scaledE.invincible
+  enemy.dead       = scaledE.dead
+  enemy.deadAngle  = scaledE.deadAngle
+  if (s.e.hats !== undefined) enemy.hats = s.e.hats
+  // restore local position/motion
+  enemy.x = localX; enemy.y = localY; enemy.vy = localVy
+  enemy.moving = localMoving; enemy.walkFrame = localWalkFrame; enemy.walkTimer = localWalkTimer
+  enemy.onGround = localOnGround
+  enemy.angle = localAngle; enemy.facing = localFacing; enemy.crouching = localCrouching
   if (wasEnemyDead && enemy.dead && savedE) {
     enemy.x=savedE.x; enemy.y=savedE.y
     enemy.deadVy=savedE.deadVy; enemy.deadAngle=savedE.deadAngle
