@@ -59,6 +59,56 @@ canvas { display:block; cursor:none; }
   color:#FFD700; cursor:pointer; font-family:monospace; font-weight:bold;
 }
 .ui-btn:hover{background:#FFD700;color:#0d0820;}
+
+/* ── ROUND END SCREEN ── */
+#round-screen {
+  position:absolute; inset:0; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  background:none; z-index:30; font-family:monospace;
+  pointer-events:none;
+}
+#round-screen .round-title {
+  font-size:14px; color:#FFD700; letter-spacing:3px; margin-bottom:8px;
+  text-shadow:0 0 8px #FFD700;
+}
+#round-screen .round-result {
+  font-size:36px; color:#FFD700; font-weight:bold; letter-spacing:4px;
+  text-shadow:4px 4px 0 #8B6914, 0 0 20px rgba(255,215,0,0.4); margin-bottom:28px;
+  animation:blink 0.7s infinite;
+}
+#round-screen .score-row {
+  display:flex; gap:60px; margin-bottom:32px;
+}
+.score-block { text-align:center; }
+.score-name  { font-size:12px; letter-spacing:2px; margin-bottom:8px; text-shadow:2px 2px 4px #000; }
+.score-pts   { font-size:48px; font-weight:bold; letter-spacing:2px; text-shadow:3px 3px 0 #000; }
+.score-pips  { display:flex; gap:6px; justify-content:center; margin-top:8px; }
+.score-pip   { width:14px; height:14px; border-radius:50%; background:#333; }
+.score-pip.won { background:#FFD700; box-shadow:0 0 6px #FFD700; }
+#rs-countdown { text-shadow:2px 2px 4px #000; }
+
+/* ── FINAL SCREEN ── */
+#final-screen {
+  position:absolute; inset:0; display:none;
+  flex-direction:column; align-items:center; justify-content:center;
+  background:none; z-index:35; font-family:monospace;
+  pointer-events:none;
+}
+#final-screen .champion-label {
+  font-size:18px; color:#FFD700; letter-spacing:6px; margin-bottom:10px;
+  text-shadow:0 0 12px #FFD700;
+}
+#final-screen .champion-name {
+  font-size:42px; font-weight:bold; letter-spacing:5px;
+  text-shadow:4px 4px 0 #8B6914, 8px 8px 0 #000;
+  margin-bottom:6px;
+}
+#final-screen .champion-sub {
+  font-size:12px; color:#aaa; letter-spacing:2px; margin-bottom:20px;
+}
+#final-screen .final-btns {
+  pointer-events:all;
+}
 </style>
 </head>
 <body>
@@ -69,20 +119,37 @@ canvas { display:block; cursor:none; }
   <h1>PIXEL DUEL</h1>
   <p>CHOOSE YOUR BATTLEFIELD</p>
   <div class="level-cards">
-    <div class="level-card" onclick="startGame(1)">
+    <div class="level-card" onclick="startMatch(1)">
       <canvas id="prev1" width="200" height="120"></canvas>
       <h2>WILD WEST</h2>
       <p>Desert night. Clouds bounce bullets skyward.</p>
     </div>
-    <div class="level-card" onclick="startGame(2)">
+    <div class="level-card" onclick="startMatch(2)">
       <canvas id="prev2" width="200" height="120"></canvas>
       <h2>NEON CITY</h2>
       <p>Street lamps and neon signs deflect your shots.</p>
     </div>
-    <div class="level-card" onclick="startGame(3)">
+    <div class="level-card" onclick="startMatch(3)">
       <canvas id="prev3" width="200" height="120"></canvas>
       <h2>MARS</h2>
       <p>Red planet. Alien ships patrol the sky and ricochet bullets.</p>
+    </div>
+  </div>
+  <!-- SLOWMO MODE TOGGLE -->
+  <div id="slowmo-toggle" style="margin-top:36px;display:flex;flex-direction:column;align-items:center;gap:10px;font-family:monospace;">
+    <div style="font-size:10px;color:#666;letter-spacing:3px;margin-bottom:2px;">SLOW MOTION MODE</div>
+    <div style="display:flex;gap:0;">
+      <button id="btn-global" onclick="setSlowMode('global')"
+        style="font-family:monospace;font-size:12px;font-weight:bold;letter-spacing:2px;
+               padding:10px 22px;cursor:pointer;border:3px solid #FFD700;
+               background:#FFD700;color:#0d0820;">GLOBAL</button>
+      <button id="btn-local" onclick="setSlowMode('local')"
+        style="font-family:monospace;font-size:12px;font-weight:bold;letter-spacing:2px;
+               padding:10px 22px;cursor:pointer;border:3px solid #FFD700;
+               background:#0d0820;color:#FFD700;">LOCAL</button>
+    </div>
+    <div id="slowmo-desc" style="font-size:9px;color:#888;letter-spacing:1px;max-width:380px;text-align:center;line-height:1.7;">
+      Both players share one slow-motion pool — anyone jumping or pressing E slows the whole world.
     </div>
   </div>
 </div>
@@ -90,8 +157,22 @@ canvas { display:block; cursor:none; }
 <!-- GAME OVER UI -->
 <div id="ui">
   <div id="result">VICTORY</div>
-  <button class="ui-btn" id="menu-btn" onclick="location.reload()">MENU</button>
+  <button class="ui-btn" id="menu-btn" onclick="goToMenu()">MENU</button>
   <button class="ui-btn" id="retry-btn" onclick="restartLevel()">RETRY</button>
+</div>
+
+<!-- ROUND END SCREEN (transparent — only countdown shown on canvas) -->
+<div id="round-screen"></div>
+
+<!-- FINAL SCREEN -->
+<div id="final-screen">
+  <div class="champion-label" id="fs-label">🏆 WINNER</div>
+  <div class="champion-name" id="fs-name" style="color:#FFD700">BILLY</div>
+  <div class="champion-sub" id="fs-sub">3 — 0</div>
+  <div class="final-btns" style="display:flex;gap:12px;">
+    <button class="ui-btn" onclick="goToMenu()">MENU</button>
+    <button class="ui-btn" onclick="restartMatch()">REMATCH</button>
+  </div>
 </div>
 
 <script>
@@ -114,11 +195,36 @@ function R(n){ return Math.round(n) }
 // ── CURRENT LEVEL ───────────────────────────────────────────
 let currentLevel = 0
 
+// ── ROUND SYSTEM ─────────────────────────────────────────────
+const TOTAL_ROUNDS = 3
+let roundNum    = 0   // current round (1-based)
+let scorePlayer = 0   // host / offline player score
+let scoreEnemy  = 0   // guest / AI score
+let roundLevels = []  // pre-picked random levels for the match
+let matchActive = false
+
 // ── STATE ────────────────────────────────────────────────────
 let timeScale=1, slowEnergy=1, isSlowmo=false, gameOver=false
 let slowmoGlowAlpha=0
+// ── SLOWMO MODE ── 'global' | 'local'
+let slowMode = 'global'
+// local mode: per-character energy/state
+let pSlowEnergy=1, pIsSlowmo=false
+let eSlowEnergy=1, eIsSlowmo=false
+const LOCAL_RADIUS = 300
 let bullets=[], particles=[], flashes=[], keys={}
 const SLOW_DRAIN=0.007, SLOW_REFILL=0.003, SLOW_SCALE=0.22
+
+function setSlowMode(mode){
+  slowMode = mode
+  document.getElementById('btn-global').style.background = mode==='global' ? '#FFD700' : '#0d0820'
+  document.getElementById('btn-global').style.color      = mode==='global' ? '#0d0820' : '#FFD700'
+  document.getElementById('btn-local').style.background  = mode==='local'  ? '#FFD700' : '#0d0820'
+  document.getElementById('btn-local').style.color       = mode==='local'  ? '#0d0820' : '#FFD700'
+  document.getElementById('slowmo-desc').textContent = mode==='global'
+    ? 'Both players share one slow-motion pool — anyone jumping or pressing E slows the whole world.'
+    : 'Each player has their own slow-motion bubble (radius 300px). Only objects inside it are slowed.'
+}
 
 // ── STARS ────────────────────────────────────────────────────
 const stars = Array.from({length:60},()=>({x:Math.random()*W,y:Math.random()*H*0.55,s:Math.random()<0.3?2:1,b:Math.random()}))
@@ -339,6 +445,7 @@ class Bullet{
     this.speed=4.9;this.dx=Math.cos(angle)*this.speed;this.dy=Math.sin(angle)*this.speed
     this.r=5;this.trail=[]
     this.pathTrail=[];this._pathD=0;this._sinceLastPt=0
+    this.bounces=0
   }
   update(dt){
     this.trail.push({x:this.x,y:this.y})
@@ -356,23 +463,23 @@ class Bullet{
       this._sinceLastPt=0; this.pathTrail.push({x:fx,y:fy,d:this._pathD})
     }
     while(this.pathTrail.length>1 && this._pathD-this.pathTrail[0].d>600) this.pathTrail.shift()
-    let ts=timeScale*dt
+    let ts = (slowMode==='local' ? getLocalTs(this.x, this.y) : timeScale) * dt
     this.x+=this.dx*ts;this.y+=this.dy*ts
     // wall bounce
-    if(this.x-this.r<0){this.x=this.r;this.dx=Math.abs(this.dx);spark(this.x,this.y)}
-    if(this.x+this.r>W){this.x=W-this.r;this.dx=-Math.abs(this.dx);spark(this.x,this.y)}
-    if(this.y-this.r<0){this.y=this.r;this.dy=Math.abs(this.dy);spark(this.x,this.y)}
-    if(this.y+this.r>H){this.y=H-this.r;this.dy=-Math.abs(this.dy);spark(this.x,this.y)}
+    if(this.x-this.r<0){this.x=this.r;this.dx=Math.abs(this.dx);spark(this.x,this.y);this.bounces++}
+    if(this.x+this.r>W){this.x=W-this.r;this.dx=-Math.abs(this.dx);spark(this.x,this.y);this.bounces++}
+    if(this.y-this.r<0){this.y=this.r;this.dy=Math.abs(this.dy);spark(this.x,this.y);this.bounces++}
+    if(this.y+this.r>H){this.y=H-this.r;this.dy=-Math.abs(this.dy);spark(this.x,this.y);this.bounces++}
     // obstacle bounce
     for(let o of obstacles){
       if(this.x+this.r>o.x&&this.x-this.r<o.x+o.w&&this.y+this.r>o.y&&this.y-this.r<o.y+o.h){
-        // figure out which axis to bounce
         let overlapL=this.x+this.r-o.x, overlapR=o.x+o.w-this.x+this.r
         let overlapT=this.y+this.r-o.y, overlapB=o.y+o.h-this.y+this.r
         let minH=Math.min(overlapL,overlapR), minV=Math.min(overlapT,overlapB)
         if(minH<minV){ this.dx*=-1; this.x+=this.dx>0?2:-2 }
         else         { this.dy*=-1; this.y+=this.dy>0?2:-2 }
         spark(this.x,this.y)
+        this.bounces++
         break
       }
     }
@@ -432,6 +539,16 @@ class FlyingHat{
     this.bounces=0
   }
   update(dt){
+    if(this.onGround){
+      // settled on ground — just drift to stop
+      this.dx*=Math.pow(0.85,dt)
+      this.x+=this.dx*dt*timeScale
+      this.spin+=this.spinSpeed*dt*timeScale
+      this.spinSpeed*=Math.pow(0.88,dt)
+      if(this.x<0){this.x=0;this.dx=Math.abs(this.dx)}
+      if(this.x>W-28){this.x=W-28;this.dx=-Math.abs(this.dx)}
+      return
+    }
     this.x+=this.dx*dt*timeScale
     this.dy+=0.5*dt*timeScale
     this.y+=this.dy*dt*timeScale
@@ -442,6 +559,13 @@ class FlyingHat{
       this.dx*=0.7
       this.spinSpeed*=0.5
       this.bounces++
+      // settle after a few bounces or when barely moving
+      if(this.bounces>=3 || Math.abs(this.dy)<0.5){
+        this.onGround=true
+        this.dy=0
+        this.spinSpeed=0
+        this.spin=0
+      }
     }
     if(this.x<0){this.x=0;this.dx=Math.abs(this.dx)}
     if(this.x>W-28){this.x=W-28;this.dx=-Math.abs(this.dx)}
@@ -521,6 +645,8 @@ class Player{
     this.P=palette
     this.hats=[palette]  // array of hat palettes worn, bottom first; [] = bareheaded
     this.hairStyle=Math.floor(seededRand()*15)  // 0–14
+    this.crouching=false  // crouch state
+    this.isDancing=false; this._danceT=0
     // ragdoll
     this.dead=false; this.deadVy=0; this.deadAngle=0; this.deadSpin=0
   }
@@ -536,11 +662,99 @@ class Player{
       ctx.translate(-w/2, -this.h/2)
       px=0; py=0
     }
-    // ── COWBOY HAT(S) or HAIRSTYLE ────────────────────────────────
+
+    // ── CROUCH WITH HAT — hat drops to GROUND-15, normal legs+animation below ──
+    if(this.crouching && this.hats && this.hats.length>0 && !ragdoll){
+      let brimY = R(GROUND) - 15
+      // legs always start right below hat brim — no gap
+      let legTop = R(GROUND) - 10
+      let lo=0; if(this.moving&&this.onGround) lo=R(Math.sin(this.walkFrame)*4)
+      ctx.fillStyle=P.pants
+      ctx.fillRect(px+2,    legTop, 12, R(GROUND)-3+lo-legTop)
+      ctx.fillRect(px+w-14, legTop, 12, R(GROUND)-3-lo-legTop)
+      ctx.fillStyle=P.boot
+      ctx.fillRect(px,      R(GROUND)-6+lo, 14, 6)
+      ctx.fillRect(px+w-14, R(GROUND)-6-lo, 14, 6)
+      // hat(s) at normal size on top
+      for(let hi=0;hi<this.hats.length;hi++){
+        let HP=this.hats[hi]
+        let oy=hi*(-8)
+        let by=brimY+oy
+        ctx.fillStyle=HP.hat
+        ctx.fillRect(px+8,   by-14, w-16, 16)
+        ctx.fillRect(px+2,   by,    w-4,  5)
+        ctx.fillRect(px,     by-2,  4,    4)
+        ctx.fillRect(px+w-4, by-2,  4,    4)
+        ctx.fillRect(px-2,   by-4,  4,    4)
+        ctx.fillRect(px+w-2, by-4,  4,    4)
+        ctx.fillStyle=HP.hatband
+        ctx.fillRect(px+8, by-2, w-16, 3)
+      }
+      ctx.globalAlpha=1
+      return
+    }
+
+    // ── CROUCH WITHOUT HAT — full head+hair, shortened torso, bent legs ──
+    if(this.crouching && (!this.hats || this.hats.length===0) && !ragdoll){
+      // head sits 20px lower than normal stance top
+      let cy = py + 20
+      // ── hair (full style, same as standing) ──
+      let hs=this.hairStyle
+      let hx=px+6, hw=w-12, ht=cy+5
+      if(hs===0){ctx.fillStyle='#cc6600';ctx.fillRect(hx-4,ht-12,hw+8,12);ctx.fillRect(hx-2,ht-16,hw+4,6);ctx.fillRect(hx,ht-18,hw,4);ctx.fillStyle='#ff8800';ctx.fillRect(hx-2,ht-14,hw+4,8);ctx.fillRect(hx,ht-17,hw-4,4)}
+      if(hs===1){ctx.fillStyle='#aa00cc';ctx.fillRect(px+w/2-4,ht-14,8,14);ctx.fillStyle='#cc22ff';ctx.fillRect(px+w/2-3,ht-14,6,10);ctx.fillStyle='#ee44ff';ctx.fillRect(px+w/2-5,ht-10,3,6);ctx.fillRect(px+w/2+2,ht-10,3,6);ctx.fillRect(px+w/2-2,ht-16,4,4)}
+      if(hs===2){ctx.fillStyle='#22aa22';ctx.fillRect(hx+hw/2-4,ht-8,8,8);ctx.fillRect(hx+hw/2-3,ht-10,6,4);ctx.fillStyle='#55dd55';ctx.fillRect(hx+hw/2-2,ht-9,4,5)}
+      if(hs===3){ctx.fillStyle='#0066cc';ctx.fillRect(hx,ht-10,hw,10);ctx.fillRect(hx-2,ht-8,4,8);ctx.fillStyle='#2288ff';ctx.fillRect(hx+2,ht-10,hw-4,6);ctx.fillStyle='#66aaff';ctx.fillRect(hx+4,ht-10,hw-8,3)}
+      if(hs===4){ctx.fillStyle='#cc1133';ctx.fillRect(hx,ht-10,hw/2-1,10);ctx.fillRect(hx+hw/2+1,ht-10,hw/2-1,10);ctx.fillRect(hx+2,ht-12,hw/2-4,4);ctx.fillRect(hx+hw/2+2,ht-12,hw/2-4,4);ctx.fillStyle='#ff4466';ctx.fillRect(hx+2,ht-10,hw/2-4,6);ctx.fillRect(hx+hw/2+2,ht-10,hw/2-4,6)}
+      if(hs===5){ctx.fillStyle='#222222';ctx.fillRect(hx,ht-5,hw,5);ctx.fillStyle='#444444';ctx.fillRect(hx+2,ht-5,hw-4,3)}
+      if(hs===6){ctx.fillStyle='#ccaa00';ctx.fillRect(hx,ht-8,hw,8);ctx.fillStyle='#ffdd22';ctx.fillRect(hx+2,ht-8,4,8);ctx.fillRect(hx+10,ht-8,4,8);ctx.fillRect(hx+2,ht-10,hw-4,4);ctx.fillStyle='#ffe866';ctx.fillRect(hx+4,ht-10,hw-8,2)}
+      if(hs===7){ctx.fillStyle='#999999';ctx.fillRect(hx-2,ht-12,hw+4,12);ctx.fillStyle='#bbbbbb';ctx.fillRect(hx,ht-12,hw,8);ctx.fillRect(hx-2,ht-8,4,8);ctx.fillRect(hx+hw-2,ht-8,4,8);ctx.fillStyle='#dddddd';ctx.fillRect(hx+2,ht-12,hw-4,4)}
+      if(hs===8){ctx.fillStyle='#6b3a1a';ctx.fillRect(hx,ht-8,hw,8);ctx.fillRect(hx-2,ht-6,4,6);ctx.fillRect(hx+hw-2,ht-6,4,6);ctx.fillStyle='#8b5a2a';ctx.fillRect(hx,ht-10,6,6);ctx.fillRect(hx+6,ht-12,6,8);ctx.fillRect(hx+12,ht-9,hw-12,5);ctx.fillStyle='#aa7744';ctx.fillRect(hx+2,ht-8,4,4);ctx.fillRect(hx+8,ht-10,4,4)}
+      if(hs===9){ctx.fillStyle='#ddddcc';ctx.fillRect(hx,ht-6,hw,6);ctx.fillRect(hx,ht-10,hw/2,6);ctx.fillStyle='#ffffff';ctx.fillRect(hx+2,ht-8,hw/2-2,4);ctx.fillStyle='#bbbbaa';ctx.fillRect(hx+hw/2,ht-6,2,6)}
+      if(hs===10){ctx.fillStyle='#7722aa';ctx.fillRect(hx,ht-8,hw,8);ctx.fillRect(hx-2,ht,6,14);ctx.fillRect(hx+2,ht+4,4,10);ctx.fillRect(hx+hw-4,ht,6,14);ctx.fillRect(hx+hw-6,ht+4,4,10);ctx.fillStyle='#aa44dd';ctx.fillRect(hx+2,ht-8,hw-4,5)}
+      if(hs===11){ctx.fillStyle='#dd6600';ctx.fillRect(hx,ht-6,hw,6);ctx.fillStyle='#ff8800';for(let[sx,sh]of[[0,10],[4,14],[8,10],[12,16],[16,8]]){ctx.fillRect(hx+sx,ht-6-sh,4,sh)}ctx.fillStyle='#ffcc44';for(let[sx,sh]of[[0,10],[4,14],[8,10],[12,16],[16,8]]){ctx.fillRect(hx+sx+1,ht-6-sh,2,4)}}
+      if(hs===12){ctx.fillStyle='#111122';ctx.fillRect(hx,ht-10,hw,10);ctx.fillRect(hx-2,ht-8,6,14);ctx.fillRect(hx-2,ht+4,4,8);ctx.fillStyle='#3333aa';ctx.fillRect(hx+2,ht-10,hw-4,4);ctx.fillRect(hx,ht-8,3,6)}
+      if(hs===13){ctx.fillStyle='#ee44aa';ctx.fillRect(hx,ht-8,hw,8);for(let i=0;i<4;i++){ctx.fillStyle=i%2===0?'#ee44aa':'#ff88cc';ctx.fillRect(hx-2,ht+i*5,6,5)}for(let i=0;i<4;i++){ctx.fillStyle=i%2===0?'#ee44aa':'#ff88cc';ctx.fillRect(hx+hw-4,ht+i*5,6,5)}ctx.fillStyle='#ffbbdd';ctx.fillRect(hx+2,ht-8,hw-4,3)}
+      if(hs===14){ctx.fillStyle='#7a3b10';ctx.fillRect(hx,ht-10,hw,10);ctx.fillStyle='#a05520';for(let cx=hx;cx<hx+hw-4;cx+=6)ctx.fillRect(cx,ht-14,6,6);for(let cx=hx+3;cx<hx+hw-4;cx+=6)ctx.fillRect(cx,ht-10,5,4);ctx.fillStyle='#c87a3a';for(let cx=hx+1;cx<hx+hw-4;cx+=6)ctx.fillRect(cx,ht-13,3,3)}
+      // head
+      ctx.fillStyle=P.skin; ctx.fillRect(px+6, cy+5, w-12, 16)
+      let aimRight=Math.cos(this.angle)<0
+      let eyeBase=aimRight?(px+8):(px+14)
+      ctx.fillStyle='#fff'; ctx.fillRect(eyeBase,cy+9,4,4); ctx.fillRect(eyeBase+6,cy+9,4,4)
+      ctx.fillStyle='#000'; ctx.fillRect(eyeBase+(aimRight?0:2),cy+9,2,4); ctx.fillRect(eyeBase+6+(aimRight?0:2),cy+9,2,4)
+      ctx.fillStyle=P.hair; ctx.fillRect(px+8,cy+18,w-16,2)
+      // shortened torso
+      ctx.fillStyle=P.shirt;  ctx.fillRect(px+2, cy+20, w-4, 16)
+      ctx.fillStyle=P.belt;   ctx.fillRect(px+2, cy+34, w-4, 4)
+      ctx.fillStyle='#FFD700';ctx.fillRect(px+w/2-4, cy+34, 8, 4)
+      // bent legs — shorter, wider stance
+      ctx.fillStyle=P.pants; ctx.fillRect(px+2, cy+38, 12, 10); ctx.fillRect(px+w-14, cy+38, 12, 10)
+      ctx.fillStyle=P.boot;  ctx.fillRect(px,   cy+46, 14, 6);  ctx.fillRect(px+w-14, cy+46, 14, 6)
+      // arm+gun
+      let ax=px+(f>0?w:0), ay=cy+22
+      let aimAng=this.angle, flipX=Math.cos(aimAng)<0
+      let drawAng=flipX?Math.PI-aimAng:aimAng
+      ctx.save();ctx.translate(ax,ay);if(flipX)ctx.scale(-1,1);ctx.rotate(drawAng)
+      ctx.fillStyle=P.skin;ctx.fillRect(0,-5,22,9)
+      ctx.restore()
+      ctx.save();ctx.translate(ax,ay);if(flipX)ctx.scale(-1,1);ctx.rotate(drawAng)
+      ctx.fillStyle='#e8dfc0';ctx.fillRect(14,2,14,14)
+      ctx.fillStyle='#c8b890';ctx.fillRect(16,4,4,4);ctx.fillRect(16,10,4,4)
+      ctx.fillStyle='#aaaaaa';ctx.fillRect(12,-7,38,12)
+      ctx.fillStyle='#cccccc';ctx.fillRect(14,-7,36,5)
+      ctx.fillStyle='#555';   ctx.fillRect(26,-6,10,4)
+      ctx.fillStyle='#999';   ctx.fillRect(12,-8,5,5)
+      ctx.fillStyle='#333';   ctx.fillRect(14,4,12,5);ctx.fillRect(14,9,3,4)
+      ctx.restore()
+      ctx.globalAlpha=1
+      return
+    }
+
+    // ── NORMAL (standing) DRAW ────────────────────────────────
     if(this.hats && this.hats.length>0){
       for(let hi=0;hi<this.hats.length;hi++){
         let HP=this.hats[hi]
-        let oy=hi*(-5)  // each extra hat shifts 5px up
+        let oy=hi*(-8)  // each extra hat shifts 8px up
         ctx.fillStyle=HP.hat
         ctx.fillRect(px+8,  py-14+oy, w-16, 16)
         ctx.fillRect(px+2,  py+oy,    w-4,  5)
@@ -774,31 +988,53 @@ class Player{
   }
   update(dt){
     this.moving=false
-    if(keys['KeyA']||keys['ArrowLeft']) {this.x-=4*dt*timeScale;this.moving=true}
-    if(keys['KeyD']||keys['ArrowRight']){this.x+=4*dt*timeScale;this.moving=true}
-    if((keys['Space']||keys['ArrowUp'])&&this.onGround){this.vy=-13;this.onGround=false}
-    if(this.moving){this.walkTimer+=dt*timeScale;this.walkFrame=this.walkTimer*0.2}
-    this.vy+=0.65*dt*timeScale;this.y+=this.vy*dt*timeScale
+    // local slowmo: use effective timescale at this character's position
+    let effTs = (slowMode==='local') ? getLocalTs(this.x+this.w/2, this.y+this.h/2) : timeScale
+    let ldt = effTs * dt
+    if(!this.isAI){
+      if(keys['KeyA']||keys['ArrowLeft']) {this.x-=4*ldt;this.moving=true}
+      if(keys['KeyD']||keys['ArrowRight']){this.x+=4*ldt;this.moving=true}
+      if((keys['Space']||keys['ArrowUp'])&&this.onGround){this.vy=-13;this.onGround=false}
+      this.crouching = !!(keys['KeyS'] && this.onGround)
+    }
+    if(this.moving){this.walkTimer+=ldt;this.walkFrame=this.walkTimer*0.2}
+    this.vy+=0.65*ldt;this.y+=this.vy*ldt
     if(this.y>=SPRITE_GROUND){this.y=SPRITE_GROUND;this.vy=0;this.onGround=true}
     this.x=Math.max(0,Math.min(W-this.w,this.x))
-    if(this.invincible>0)this.invincible-=dt*timeScale
-    if(this.reloading){this.reloadTimer-=dt;if(this.reloadTimer<=0){this.ammo=this.maxAmmo;this.reloading=false}}
+    if(this.invincible>0)this.invincible-=ldt
+    if(this.reloading){this.reloadTimer-=ldt;if(this.reloadTimer<=0){this.ammo=this.maxAmmo;this.reloading=false}}
     if(this.ammo<=0&&!this.reloading){this.reloading=true;this.reloadTimer=60}
+    // ── DANCE ──
+    if(this.isDancing){
+      this._danceT+=ldt
+      this.walkFrame=this._danceT*0.55
+      this.moving=true
+      // bounce up and down
+      if(this.onGround && Math.sin(this._danceT*0.35)>0.85){
+        this.vy=-8; this.onGround=false
+      }
+      // sway left/right
+      let sway=Math.sin(this._danceT*0.28)*1.2
+      this.x=Math.max(0,Math.min(W-this.w, this.x+sway*ldt))
+      this.facing=sway>0?1:-1
+    }
   }
   updateRagdoll(dt){
-    this.deadVy+=1.0*dt*timeScale
-    this.y+=this.deadVy*dt*timeScale
+    let effTs = (slowMode==='local') ? getLocalTs(this.x+this.w/2, this.y+this.h/2) : timeScale
+    let ldt = effTs * dt
+    this.deadVy+=1.0*ldt
+    this.y+=this.deadVy*ldt
     // horizontal drift limited to 10px total
     let driftDir=this.deadTargetAngle>0?1:-1
     if(Math.abs(this.deadDriftX)<10){
-      let step=driftDir*0.8*dt*timeScale
+      let step=driftDir*0.8*ldt
       this.deadDriftX+=step
       this.x+=step
     }
     // rotate toward target angle smoothly, then lock
     let diff=this.deadTargetAngle-this.deadAngle
     if(Math.abs(diff)>0.01){
-      this.deadAngle+=diff*0.10*dt*timeScale
+      this.deadAngle+=diff*0.10*ldt
     } else {
       this.deadAngle=this.deadTargetAngle
     }
@@ -819,26 +1055,71 @@ class Player{
 }
 
 class Enemy extends Player{
-  constructor(x,facing,palette){super(x,facing,palette);this.aimNoise=0;this.shootCooldown=30}
+  constructor(x,facing,palette){super(x,facing,palette);this.aimNoise=0;this.shootCooldown=30;this.isAI=true}
   updateAI(dt,target){
     if(gameOver)return
+    let effTs = (slowMode==='local') ? getLocalTs(this.x+this.w/2, this.y+this.h/2) : timeScale
+    let ldt = effTs * dt
     let ax=this.x+this.w/2,ay=this.y+30,tx=target.x+target.w/2,ty=target.y+30
     let ideal=Math.atan2(ty-ay,tx-ax)
     this.aimNoise+=(Math.random()-0.5)*0.08;this.aimNoise*=0.9;this.angle=ideal+this.aimNoise
     this.moving=false
     let distToPlayer=Math.abs(ax-tx),preferredDist=W*0.38,halfField=W*0.5
+
+    // ── CROUCH LOGIC ──
+    let bulletNear=false
     for(let b of bullets){
       if(b.owner==='player'){
         let dx=b.x-this.x,dy=b.y-this.y
-        if(Math.sqrt(dx*dx+dy*dy)<250){this.x+=(b.dx<0?3:-3)*dt*timeScale;this.moving=true;if(this.onGround&&Math.random()<0.02){this.vy=-13;this.onGround=false}}
+        let dist=Math.sqrt(dx*dx+dy*dy)
+        if(dist<250){
+          this.x+=(b.dx<0?3:-3)*ldt;this.moving=true
+          if(this.onGround&&Math.random()<0.02){this.vy=-13;this.onGround=false}
+        }
+        // bullet heading toward AI and close enough to dodge by crouching
+        if(dist<320 && b.dx*(this.x-b.x)>0) bulletNear=true
       }
     }
-    if(this.x+this.w/2<halfField){this.x+=2.5*dt*timeScale;this.moving=true}
-    if(distToPlayer<preferredDist&&tx<ax){this.x+=2*dt*timeScale;this.moving=true}
-    if(distToPlayer>preferredDist*1.6&&this.x+this.w/2>halfField){this.x-=1*dt*timeScale;this.moving=true}
+    // duck under hat when bullet incoming (if has hat) — hold crouch for ~40 ticks
+    if(!this._crouchTimer) this._crouchTimer=0
+    if(bulletNear && this.hats && this.hats.length>0 && this.onGround && Math.random()<0.015){
+      this._crouchTimer=60+Math.random()*180
+    }
+    // also crouch (no hat) when reloading
+    if(this.reloading && this.onGround){
+      this._crouchTimer=Math.max(this._crouchTimer, this.reloadTimer+5)
+    }
+    this._crouchTimer=Math.max(0, this._crouchTimer-ldt)
+    this.crouching = this._crouchTimer>0 && this.onGround
+
+    if(this.x+this.w/2<halfField){this.x+=2.5*ldt;this.moving=true}
+    if(distToPlayer<preferredDist&&tx<ax){this.x+=2*ldt;this.moving=true}
+    if(distToPlayer>preferredDist*1.6&&this.x+this.w/2>halfField){this.x-=1*ldt;this.moving=true}
     if(this.x<halfField-this.w)this.x=halfField-this.w
-    this.shootCooldown-=dt*timeScale
-    if(this.shootCooldown<=0&&this.ammo>0&&!this.reloading){this.shootCooldown=25+Math.random()*30;shoot(this,'enemy')}
+
+    // ── HAT HUNTING ── chase nearest settled hat if < 2 hats
+    if(this.hats && this.hats.length < 2 && !this.crouching){
+      let nearestHat = null, nearestDist = 999999
+      for(let h of flyingHats){
+        if(!h.onGround) continue
+        let hx = h.x + 14
+        let d  = Math.abs(ax - hx)
+        if(d < nearestDist){ nearestDist=d; nearestHat=h }
+      }
+      if(nearestHat && nearestDist < W*0.5){
+        let hx = nearestHat.x + 14
+        let moveDir = hx > ax ? 1 : -1
+        this.x += moveDir * 3 * ldt
+        this.moving = true
+        this.facing = moveDir
+      }
+    }
+
+    this.shootCooldown-=ldt
+    // don't shoot while hiding under hat
+    if(this.shootCooldown<=0&&this.ammo>0&&!this.reloading&&canShoot(this)){
+      this.shootCooldown=25+Math.random()*30;shoot(this,'enemy')
+    }
   }
 }
 
@@ -939,7 +1220,10 @@ function mpConnect(serverUrl) {
       // Guest receives level start command from host
       mpHideOverlay()
       mp.currentSeed = msg.seed || 12345
-      startGame(msg.level, false, false)  // skipNetSync=false so guest starts sending inputs
+      if(msg.roundNum !== undefined){ roundNum = msg.roundNum - 1; matchActive = true }
+      if(msg.scoreHost !== undefined){ scoreEnemy = msg.scoreHost; scorePlayer = msg.scoreGuest }
+      if(msg.slowMode !== undefined) setSlowMode(msg.slowMode)
+      startGame(msg.level, false, false)
     }
 
     if (msg.type === 'input') {
@@ -957,8 +1241,8 @@ function mpConnect(serverUrl) {
     }
 
     if (msg.type === 'shoot') {
-      console.log('[HOST] received shoot from guest, enemy exists:', !!enemy, 'gameOver:', gameOver)
       // Host receives shoot request from guest — fire enemy gun
+      if (mp.role === 'host' && enemy && !gameOver && !canShoot(enemy)) return
       if (mp.role === 'host' && enemy && !gameOver) {
         shoot(enemy, 'enemy')
       }
@@ -1008,6 +1292,59 @@ function mpConnect(serverUrl) {
         startGame(msg.level, true)
       }
     }
+
+    if (msg.type === 'round_over') {
+      if (mp.role === 'guest') {
+        // guest perspective: host pts → enemyScore, guest pts → playerScore
+        scorePlayer = msg.scoreGuest
+        scoreEnemy  = msg.scoreHost
+        roundNum    = msg.round
+        let guestPts = msg.ePts, hostPts = msg.pts
+        if(roundNum >= TOTAL_ROUNDS){
+          setTimeout(()=>showFinalScreen(), 900)
+        } else {
+          setTimeout(()=>showRoundScreen(msg.result, guestPts, hostPts), 900)
+        }
+      }
+    }
+
+    if (msg.type === 'next_round') {
+      if (mp.role === 'guest') {
+        document.getElementById('round-screen').style.display='none'
+        _countdownVal = 0
+        _roundWinner = null
+        if(player) player.isDancing=false
+        if(enemy)  enemy.isDancing=false
+        mp.currentSeed = msg.seed || mp.currentSeed
+        startGame(msg.level, false, false)
+      }
+    }
+
+    if (msg.type === 'rematch') {
+      if (mp.role === 'guest') {
+        stopConfetti()
+        if(player) player.isDancing=false
+        if(enemy)  enemy.isDancing=false
+        document.getElementById('final-screen').style.display='none'
+        scorePlayer=0; scoreEnemy=0; roundNum=0
+        mp.currentSeed = msg.seed || mp.currentSeed
+        startGame(msg.level, false, false)
+      }
+    }
+  }
+
+  mp.ws.onerror = () => {
+    const urlPrompt = document.getElementById('url-prompt')
+    const errEl = document.getElementById('srv-err')
+    if (urlPrompt) urlPrompt.style.display = 'flex'
+    if (errEl) {
+      errEl.innerHTML = `Connection failed —
+        <span id="err-readme-link" style="text-decoration:underline;cursor:pointer;color:#FFD700">Readme</span>
+        to make own server`
+      const rl = document.getElementById('err-readme-link')
+      const rp = document.getElementById('readme-panel')
+      if (rl && rp) rl.onclick = () => { rp.style.display = 'flex' }
+    }
   }
 
   mp.ws.onclose = () => {
@@ -1046,19 +1383,22 @@ function mpSendState() {
     p:  { x:player.x, y:player.y, vy:player.vy, angle:player.angle, facing:player.facing,
           lives:player.lives, ammo:player.ammo, reloading:player.reloading, reloadTimer:player.reloadTimer,
           hats:player.hats, dead:player.dead, deadAngle:player.deadAngle, invincible:player.invincible,
-          moving:player.moving, walkFrame:player.walkFrame,
+          moving:player.moving, walkFrame:player.walkFrame, crouching:player.crouching,
           deadVy:player.deadVy, deadBounced:player.deadBounced, deadDriftX:player.deadDriftX, deadTargetAngle:player.deadTargetAngle,
           hairStyle:player.hairStyle, P:player.P },
     e:  { x:enemy.x,  y:enemy.y,  vy:enemy.vy,  angle:enemy.angle,  facing:enemy.facing,
           lives:enemy.lives,  ammo:enemy.ammo,  reloading:enemy.reloading, reloadTimer:enemy.reloadTimer,
           hats:enemy.hats, dead:enemy.dead, deadAngle:enemy.deadAngle, invincible:enemy.invincible,
-          moving:enemy.moving, walkFrame:enemy.walkFrame,
+          moving:enemy.moving, walkFrame:enemy.walkFrame, crouching:enemy.crouching,
           deadVy:enemy.deadVy, deadBounced:enemy.deadBounced, deadDriftX:enemy.deadDriftX, deadTargetAngle:enemy.deadTargetAngle,
           hairStyle:enemy.hairStyle, P:enemy.P },
-    bullets: bullets.map(b=>({x:b.x,y:b.y,dx:b.dx,dy:b.dy,owner:b.owner,trail:b.trail.slice()})),
+    bullets: bullets.map(b=>({x:b.x,y:b.y,dx:b.dx,dy:b.dy,owner:b.owner,trail:b.trail.slice(),bounces:b.bounces})),
     flyingHats: flyingHats.map(h=>({x:h.x,y:h.y,dx:h.dx,dy:h.dy,spin:h.spin,P:h.P,onGround:h.onGround,spinSpeed:h.spinSpeed})),
     flyingGuns: flyingGuns.map(g=>({x:g.x,y:g.y,dx:g.dx,dy:g.dy,spin:g.spin,spinSpeed:g.spinSpeed})),
     go: gameOver, ts: timeScale, se: slowEnergy,
+    slowMode,
+    pIsSlowmo, pSlowEnergy,
+    eIsSlowmo, eSlowEnergy,
     particles: newParticles
   }
   mp.ws.send(JSON.stringify({ type:'state', state }))
@@ -1097,8 +1437,8 @@ function mpApplyState(s) {
     player.deadBounced=savedP.deadBounced; player.deadDriftX=savedP.deadDriftX
   }
 
-  // Enemy (guest's character): preserve angle/facing + ragdoll once dead
-  let localAngle = enemy.angle, localFacing = enemy.facing
+  // Enemy (guest's character): preserve angle/facing/crouching + ragdoll once dead
+  let localAngle = enemy.angle, localFacing = enemy.facing, localCrouching = enemy.crouching
   let wasEnemyDead = enemy.dead
   let savedE = wasEnemyDead ? {x:enemy.x,y:enemy.y,deadVy:enemy.deadVy,deadAngle:enemy.deadAngle,deadBounced:enemy.deadBounced,deadDriftX:enemy.deadDriftX} : null
   let scaledE = scalePos(s.e)
@@ -1107,6 +1447,7 @@ function mpApplyState(s) {
   if (incomingHatsE !== undefined) enemy.hats = incomingHatsE  // restore array
   enemy.angle = localAngle
   enemy.facing = localFacing
+  enemy.crouching = localCrouching  // guest controls their own crouch locally
   if (wasEnemyDead && enemy.dead && savedE) {
     enemy.x=savedE.x; enemy.y=savedE.y
     enemy.deadVy=savedE.deadVy; enemy.deadAngle=savedE.deadAngle
@@ -1118,12 +1459,30 @@ function mpApplyState(s) {
   slowEnergy = s.se
   isSlowmo = timeScale < 1
 
-  // Sync bullets — scale coords, preserve pathTrail
+  // sync slowMode from host
+  if (s.slowMode !== undefined && s.slowMode !== slowMode) setSlowMode(s.slowMode)
+
+  // local mode: host sends its pIsSlowmo/pSlowEnergy; guest owns its own eIsSlowmo/eSlowEnergy
+  if (s.slowMode === 'local' || slowMode === 'local') {
+    pIsSlowmo    = s.pIsSlowmo    ?? pIsSlowmo
+    pSlowEnergy  = s.pSlowEnergy  ?? pSlowEnergy
+    // guest updates its own eIsSlowmo/eSlowEnergy independently (done in guest updateSlowmo below)
+    isSlowmo = pIsSlowmo || eIsSlowmo
+  } else {
+    // global: sync everything from host
+    pIsSlowmo   = s.pIsSlowmo   ?? (timeScale < 1)
+    eIsSlowmo   = s.eIsSlowmo   ?? (timeScale < 1)
+    pSlowEnergy = s.pSlowEnergy ?? slowEnergy
+    eSlowEnergy = s.eSlowEnergy ?? slowEnergy
+  }
+
+  // Sync bullets — scale coords, preserve pathTrail and bounces
   let prevBullets = bullets
   bullets = s.bullets.map(b => {
     let bl = new Bullet(b.x*sx, b.y*sy, 0, b.owner)
     bl.dx = b.dx*sx; bl.dy = b.dy*sy
     bl.trail = (b.trail||[]).map(t=>({x:t.x*sx,y:t.y*sy}))
+    bl.bounces = b.bounces || 0
     let prev = prevBullets.find(p => p.owner===b.owner && Math.abs(p.dx/sx-b.dx)<0.01 && Math.abs(p.dy/sy-b.dy)<0.01)
     if (prev) { bl.pathTrail=prev.pathTrail; bl._pathD=prev._pathD; bl._sinceLastPt=prev._sinceLastPt }
     return bl
@@ -1182,7 +1541,7 @@ function mpStartSendingInputs() {
 // Called by host when level starts to tell guest which level
 function mpNotifyLevelStart(level) {
   if (mp.role === 'host' && mp.ws?.readyState === 1) {
-    mp.ws.send(JSON.stringify({ type: 'start_level', level, seed: mp.currentSeed }))
+    mp.ws.send(JSON.stringify({ type: 'start_level', level, seed: mp.currentSeed, roundNum, scoreHost:scorePlayer, scoreGuest:scoreEnemy, slowMode }))
     // Begin sending state snapshots
     if (mp.stateInterval) clearInterval(mp.stateInterval)
     mp.stateInterval = setInterval(mpSendState, 16)  // ~60fps fallback
@@ -1191,30 +1550,99 @@ function mpNotifyLevelStart(level) {
 
 // Show server URL input on load
 window.addEventListener('load', () => {
-  const saved = localStorage.getItem('mp_server_url') || ''
   const div = document.createElement('div')
   div.id = 'url-prompt'
   div.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.88);z-index:60;font-family:monospace;color:#FFD700;gap:16px'
   div.innerHTML = `
-    <div style="font-size:20px;letter-spacing:2px">🔫 GUN DUEL — MULTIPLAYER</div>
-    <div style="font-size:13px;color:#aaa">Enter Railway server URL</div>
-    <input id="srv-url" type="text" value="${saved}" placeholder="https://yourapp.railway.app"
-      style="width:340px;padding:10px;font-size:14px;font-family:monospace;background:#1a1a2a;color:#fff;border:2px solid #FFD700;outline:none;text-align:center"/>
-    <button id="srv-connect" style="padding:10px 32px;font-size:16px;font-family:monospace;background:#FFD700;color:#000;border:none;cursor:pointer;letter-spacing:2px">CONNECT</button>
-    <div id="srv-err" style="font-size:12px;color:#ff4422;min-height:16px"></div>
+    <div style="font-size:20px;letter-spacing:2px">🔫 PIXEL DUEL</div>
+    <div style="font-size:13px;color:#aaa">
+      <span id="readme-link" style="text-decoration:underline;cursor:pointer;color:#FFD700">Readme</span>
+      to make own server
+    </div>
+    <button id="srv-connect" style="width:220px;padding:10px 0;font-size:16px;font-family:monospace;background:#FFD700;color:#000;border:none;cursor:pointer;letter-spacing:2px">🙌 MULTIPLAYER</button>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+      <div style="width:80px;height:1px;background:#444"></div>
+      <span style="font-size:11px;color:#555;letter-spacing:1px">OR</span>
+      <div style="width:80px;height:1px;background:#444"></div>
+    </div>
+    <button id="srv-offline" style="width:220px;padding:10px 0;font-size:14px;font-family:monospace;background:transparent;color:#aaa;border:2px solid #555;cursor:pointer;letter-spacing:2px">🤠 OFFLINE MODE</button>
+    <div id="srv-err" style="font-size:12px;color:#ff4422;min-height:32px;text-align:center;line-height:1.6"></div>
   `
   document.body.appendChild(div)
 
+  // ── README PANEL ──────────────────────────────────────────────
+  const readmePanel = document.createElement('div')
+  readmePanel.id = 'readme-panel'
+  readmePanel.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.95);z-index:70;font-family:monospace;padding:20px;box-sizing:border-box'
+  readmePanel.innerHTML = `
+    <div style="max-width:560px;width:100%;color:#eee;font-size:13px;line-height:1.7;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <span style="font-size:18px;color:#FFD700;letter-spacing:2px">📖 PIXEL DUEL — README</span>
+        <span id="readme-close" style="cursor:pointer;font-size:20px;color:#aaa;padding:0 8px">✕</span>
+      </div>
+
+      <div style="color:#FFD700;font-size:14px;letter-spacing:1px;margin-bottom:8px">🚂 DEPLOY ON RAILWAY</div>
+      <div style="color:#888;margin-bottom:12px">Host the WebSocket server for free so two players can connect from anywhere.</div>
+
+      <div style="color:#aaa;margin-bottom:4px"><span style="color:#FFD700">1.</span> Go to <a href="https://railway.app" target="_blank" style="color:#fff;text-decoration:underline">railway.app</a> → Sign in</div>
+      <div style="color:#aaa;margin-bottom:4px"><span style="color:#FFD700">2.</span> <b style="color:#fff">New Project</b> → <b style="color:#fff">Deploy from GitHub repo</b> → search:</div>
+      <div style="background:#111;border:1px solid #333;padding:8px 12px;margin-bottom:10px;color:#0f0;font-size:12px;word-break:break-all">
+        TORT60091/Pixel_Duel
+      </div>
+      <div style="color:#aaa;margin-bottom:14px"><span style="color:#FFD700">3.</span> <b style="color:#fff">Settings → Networking → Generate Domain</b> — copy URL <span style="color:#FFD700">(your-app-name.up.railway.app)</span></div>
+
+      <div style="border-top:1px solid #333;margin-bottom:14px"></div>
+
+      <div style="color:#FFD700;font-size:14px;letter-spacing:1px;margin-bottom:8px">🎮 PLAY</div>
+      <div style="color:#aaa;margin-bottom:4px"><span style="color:#FFD700">1.</span> Open Railway URL → first player is host and picks the level</div>
+      <div style="color:#aaa;margin-bottom:4px"><span style="color:#FFD700">2.</span> Send Railway URL to a friend → second player is guest</div>
+      <div style="color:#aaa;margin-bottom:18px"><span style="color:#FFD700">3.</span> Enjoy your playtime 🔫🤠</div>
+
+      <div style="border-top:1px solid #333;margin-bottom:14px"></div>
+
+      <div style="color:#FFD700;font-size:14px;letter-spacing:1px;margin-bottom:8px">🕹️ CONTROLS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;color:#aaa">
+        <div><span style="color:#fff">A / D  ← →</span> — move</div>
+        <div><span style="color:#fff">Mouse</span> — aim</div>
+        <div><span style="color:#fff">Space / ↑</span> — jump</div>
+        <div><span style="color:#fff">LMB (hold)</span> — auto-fire</div>
+        <div><span style="color:#fff">E (hold)</span> — slow motion</div>
+        <div><span style="color:#fff">S</span> — crouch / hide in hat</div>
+      </div>
+
+      <div style="margin-top:20px;text-align:center">
+        <a href="https://github.com/TORT60091/Pixel_Duel" target="_blank"
+           style="color:#FFD700;text-decoration:underline;font-size:12px">github.com/TORT60091/Pixel_Duel</a>
+      </div>
+    </div>
+  `
+  document.body.appendChild(readmePanel)
+
+  function showReadmeLink(errEl){
+    errEl.innerHTML = `Connection failed —
+      <span id="err-readme-link" style="text-decoration:underline;cursor:pointer;color:#FFD700">Readme</span>
+      to make own server`
+    document.getElementById('err-readme-link').onclick = () => { readmePanel.style.display = 'flex' }
+  }
+
+  document.getElementById('readme-link').onclick = () => { readmePanel.style.display = 'flex' }
+  document.getElementById('readme-close').onclick = () => { readmePanel.style.display = 'none' }
+
   document.getElementById('srv-connect').onclick = () => {
-    const url = document.getElementById('srv-url').value.trim()
-    if(!url){ document.getElementById('srv-err').textContent='Enter a URL'; return }
-    localStorage.setItem('mp_server_url', url)
+    const errEl = document.getElementById('srv-err')
+    const isLocal = location.protocol === 'file:'
+    if(isLocal){
+      showReadmeLink(errEl)
+      return
+    }
+    // auto-detect server URL from current page origin
+    const url = location.origin
     div.style.display='none'
     mpConnect(url)
   }
-  document.getElementById('srv-url').addEventListener('keydown', e => {
-    if(e.key==='Enter') document.getElementById('srv-connect').click()
-  })
+  document.getElementById('srv-offline').onclick = () => {
+    div.style.display = 'none'
+  }
 })
 
 // ── INPUT ────────────────────────────────────────────────────
@@ -1230,16 +1658,25 @@ canvas.addEventListener('mousemove',e=>{
   target.angle=Math.atan2(e.clientY-ay, e.clientX-ax)
   target.facing=e.clientX>target.x+target.w/2?1:-1
 })
-canvas.addEventListener('mousedown',()=>{
-  if(gameOver) return
-  if(mp.connected && mp.role === 'guest') {
-    // Send dedicated shoot message to host
-    if(mp.ws && mp.ws.readyState === 1)
-      mp.ws.send(JSON.stringify({ type: 'shoot' }))
-  } else if(player) {
-    shoot(player,'player')
+let mouseDown = false
+let autoFireTimer = 0
+const AUTO_FIRE_DELAY = 12  // ~0.2s at 60fps
+
+function canShoot(p){ return p && !p.dead && !(p.crouching && p.hats && p.hats.length>0) }
+
+canvas.addEventListener('mousedown', () => {
+  mouseDown = true
+  if (gameOver) return
+  // fire immediately on press
+  if (mp.connected && mp.role === 'guest') {
+    if (mp.ws && mp.ws.readyState === 1) mp.ws.send(JSON.stringify({ type: 'shoot' }))
+  } else if (canShoot(player)) {
+    shoot(player, 'player')
   }
+  autoFireTimer = AUTO_FIRE_DELAY
 })
+canvas.addEventListener('mouseup',   () => { mouseDown = false })
+canvas.addEventListener('mouseleave',() => { mouseDown = false })
 
 // ── CACTUS ───────────────────────────────────────────────────
 function drawCactus(cx,gy,P){
@@ -1428,30 +1865,119 @@ function drawHUD(){
   for(let i=0;i<6;i++){let f=i<enemy.ammo;ctx.fillStyle=f?'#ff4422':'#333';ctx.fillRect(W-116+i*16,90,10,20);if(f){ctx.fillStyle='#fff';ctx.fillRect(W-114+i*16,92,6,4)}}
   if(enemy.reloading){ctx.fillStyle='#aaa';ctx.font='bold 9px monospace';ctx.fillText('RELOADING',W-116,118);ctx.fillStyle='#333';ctx.fillRect(W-116,122,96,6);ctx.fillStyle='#ff4422';ctx.fillRect(W-116,122,R(96*(1-enemy.reloadTimer/60)),6)}
 
-  // ── SLOWMO bar (centre, raised 50px from previous) ───────────
+  // ── SLOWMO bar ───────────────────────────────────────────────
   let barY=64
-  ctx.fillStyle='#1a1a2a';ctx.fillRect(W/2-85,barY,170,14)
-  ctx.fillStyle=isSlowmo?'#ffff00':'#00eeff';ctx.fillRect(W/2-83,barY+2,R(166*slowEnergy),10)
-  ctx.fillStyle=isSlowmo?'#ffff00':'#888';ctx.font='bold 9px monospace'
-  ctx.fillText('JUMP/[E] SLOW',W/2-42,barY+24)
+  if(slowMode==='global'){
+    ctx.fillStyle='#1a1a2a';ctx.fillRect(W/2-85,barY,170,14)
+    ctx.fillStyle=isSlowmo?'#ffff00':'#00eeff';ctx.fillRect(W/2-83,barY+2,R(166*slowEnergy),10)
+    ctx.fillStyle=isSlowmo?'#ffff00':'#888';ctx.font='bold 9px monospace'
+    ctx.fillText('JUMP/[E] SLOW',W/2-42,barY+24)
+  } else {
+    // two mini bars: left = player, right = enemy
+    let bw=70
+    // player bar (left-aligned under player HUD area)
+    ctx.fillStyle='#1a1a2a';ctx.fillRect(W/2-bw-10,barY,bw,10)
+    ctx.fillStyle=pIsSlowmo?'#ffff00':'#00eeff';ctx.fillRect(W/2-bw-8,barY+2,R((bw-4)*pSlowEnergy),6)
+    // enemy bar (right-aligned under enemy HUD area)
+    ctx.fillStyle='#1a1a2a';ctx.fillRect(W/2+10,barY,bw,10)
+    ctx.fillStyle=eIsSlowmo?'#ffff00':'#ff4422';ctx.fillRect(W/2+12,barY+2,R((bw-4)*eSlowEnergy),6)
+    ctx.fillStyle='#666';ctx.font='bold 9px monospace'
+    ctx.fillText('LOCAL SLOW',W/2-30,barY+24)
+  }
+
+  // ── ROUND indicator + scores (centre top) ────────────────────
+  if(matchActive && roundNum>0){
+    // background pill
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(W/2-130,4,260,38)
+    // round label
+    ctx.fillStyle='#888'; ctx.font='bold 11px monospace'; ctx.textAlign='center'
+    ctx.fillText(`ROUND ${roundNum}`, W/2, 18)
+    // scores: player left, enemy right
+    ctx.font='bold 22px monospace'
+    ctx.fillStyle='#FFD700'
+    ctx.fillText(scorePlayer, W/2-40, 36)
+    ctx.fillStyle='#555'
+    ctx.fillText('—', W/2, 36)
+    ctx.fillStyle='#ff4422'
+    ctx.fillText(scoreEnemy, W/2+40, 36)
+    ctx.textAlign='left'
+  }
 }
 
 // ── COLLISION ────────────────────────────────────────────────
-function rectHit(b,p){return b.x>p.x&&b.x<p.x+p.w&&b.y>p.y&&b.y<p.y+p.h}
+function rectHit(b,p){
+  // hitbox changes based on crouch state
+  let x=p.x, w=p.w, y, h
+  if(p.crouching && p.hats && p.hats.length>0){
+    // hiding under hat: hat crown top → boots bottom
+    // brim at GROUND-15, crown 16px above = GROUND-31, boots go to GROUND
+    y = GROUND - 31
+    h = 31 + 6  // crown top to boot bottom
+  } else if(p.crouching){
+    // crouch no hat: compressed body, starts 20px lower than normal
+    y = p.y + 20
+    h = 46
+  } else {
+    y = p.y
+    h = p.h
+  }
+  return b.x>x && b.x<x+w && b.y>y && b.y<y+h
+}
 function bHit(a,b){let dx=a.x-b.x,dy=a.y-b.y;return dx*dx+dy*dy<(a.r+b.r)*(a.r+b.r)}
 
 // ── SLOWMO ───────────────────────────────────────────────────
-function updateSlowmo(dt){
-  let active = keys['KeyE'] || !player.onGround
-  if (mp.connected && mp.role === 'host' && enemy) {
-    active = active || mp.guestKeys['KeyE'] || !enemy.onGround
+// Returns effective timeScale for a point (x,y) in local mode
+function getLocalTs(x, y){
+  let ts = 1
+  if(pIsSlowmo && player){
+    let px=player.x+player.w/2, py=player.y+player.h/2
+    let d=Math.sqrt((x-px)*(x-px)+(y-py)*(y-py))
+    if(d < LOCAL_RADIUS) ts = Math.min(ts, SLOW_SCALE + (1-SLOW_SCALE)*(d/LOCAL_RADIUS))
   }
-  if(active&&slowEnergy>0){isSlowmo=true;slowEnergy=Math.max(0,slowEnergy-SLOW_DRAIN*dt);timeScale=SLOW_SCALE}
-  else{isSlowmo=false;slowEnergy=Math.min(1,slowEnergy+SLOW_REFILL*dt);timeScale=1}
-  if(slowEnergy<=0){isSlowmo=false;timeScale=1}
-  let target=isSlowmo?1:0
-  slowmoGlowAlpha+=(target-slowmoGlowAlpha)*0.08*dt
-  if(slowmoGlowAlpha<0.005) slowmoGlowAlpha=0
+  if(eIsSlowmo && enemy){
+    let ex=enemy.x+enemy.w/2, ey=enemy.y+enemy.h/2
+    let d=Math.sqrt((x-ex)*(x-ex)+(y-ey)*(y-ey))
+    if(d < LOCAL_RADIUS) ts = Math.min(ts, SLOW_SCALE + (1-SLOW_SCALE)*(d/LOCAL_RADIUS))
+  }
+  return ts
+}
+
+function updateSlowmo(dt){
+  if(slowMode === 'global'){
+    let active = keys['KeyE'] || !player.onGround
+    if (mp.connected && mp.role === 'host' && enemy) {
+      active = active || mp.guestKeys['KeyE'] || !enemy.onGround
+    }
+    if(active&&slowEnergy>0){isSlowmo=true;slowEnergy=Math.max(0,slowEnergy-SLOW_DRAIN*dt);timeScale=SLOW_SCALE}
+    else{isSlowmo=false;slowEnergy=Math.min(1,slowEnergy+SLOW_REFILL*dt);timeScale=1}
+    if(slowEnergy<=0){isSlowmo=false;timeScale=1}
+    pIsSlowmo=isSlowmo; eIsSlowmo=isSlowmo
+    let target=isSlowmo?1:0
+    slowmoGlowAlpha+=(target-slowmoGlowAlpha)*0.08*dt
+    if(slowmoGlowAlpha<0.005) slowmoGlowAlpha=0
+  } else {
+    // LOCAL mode — each character has own energy
+    let pActive = keys['KeyE'] || !player.onGround
+    let eActive = (mp.connected && mp.role==='host' && enemy)
+      ? (mp.guestKeys['KeyE'] || !enemy.onGround)
+      : (enemy && !enemy.onGround)
+
+    if(pActive&&pSlowEnergy>0){pIsSlowmo=true;pSlowEnergy=Math.max(0,pSlowEnergy-SLOW_DRAIN*dt)}
+    else{pIsSlowmo=false;pSlowEnergy=Math.min(1,pSlowEnergy+SLOW_REFILL*dt)}
+    if(pSlowEnergy<=0) pIsSlowmo=false
+
+    if(eActive&&eSlowEnergy>0){eIsSlowmo=true;eSlowEnergy=Math.max(0,eSlowEnergy-SLOW_DRAIN*dt)}
+    else{eIsSlowmo=false;eSlowEnergy=Math.min(1,eSlowEnergy+SLOW_REFILL*dt)}
+    if(eSlowEnergy<=0) eIsSlowmo=false
+
+    isSlowmo = pIsSlowmo || eIsSlowmo
+    timeScale = 1  // global timeScale stays 1; per-object scaling via getLocalTs()
+    slowEnergy = pSlowEnergy  // for HUD bar (player's bar)
+
+    let target=isSlowmo?1:0
+    slowmoGlowAlpha+=(target-slowmoGlowAlpha)*0.08*dt
+    if(slowmoGlowAlpha<0.005) slowmoGlowAlpha=0
+  }
 }
 
 function takeHit(p,isPlayer,bulletDx){
@@ -1497,12 +2023,24 @@ let glowT=0
 
 function loop(now){
   let dt=Math.min((now-lastTime)/16.67,3); lastTime=now
+  window._loopId = requestAnimationFrame(loop)
+
+  // don't run game logic if players aren't initialized (e.g. on menu screen)
+  if(!player || !enemy){return}
+
   glowT+=dt*0.05
 
   // Guest gets timeScale/isSlowmo from host snapshot; only host/SP runs updateSlowmo
   if (!mp.connected || mp.role !== 'guest') updateSlowmo(dt)
-  // always update glow alpha so matrix trail fades smoothly on guest too
   else {
+    // guest always updates its own slowmo energy in LOCAL mode
+    if (slowMode === 'local' && enemy) {
+      let eActive = keys['KeyE'] || !enemy.onGround
+      if(eActive&&eSlowEnergy>0){eIsSlowmo=true;eSlowEnergy=Math.max(0,eSlowEnergy-SLOW_DRAIN*dt)}
+      else{eIsSlowmo=false;eSlowEnergy=Math.min(1,eSlowEnergy+SLOW_REFILL*dt)}
+      if(eSlowEnergy<=0) eIsSlowmo=false
+      isSlowmo = pIsSlowmo || eIsSlowmo
+    }
     let target=isSlowmo?1:0
     slowmoGlowAlpha+=(target-slowmoGlowAlpha)*0.08*dt
     if(slowmoGlowAlpha<0.005) slowmoGlowAlpha=0
@@ -1513,6 +2051,25 @@ function loop(now){
   else if(currentLevel===2) drawNeonCity(glowT)
   else if(currentLevel===3) drawMars(glowT)
 
+  // draw local slowmo bubbles
+  if(slowMode==='local'){
+    const drawBubble = (p, isSlow)=>{
+      if(!p || !isSlow) return
+      let cx=p.x+p.w/2, cy=p.y+p.h/2
+      ctx.save()
+      let grad=ctx.createRadialGradient(cx,cy,LOCAL_RADIUS*0.6,cx,cy,LOCAL_RADIUS)
+      grad.addColorStop(0,'rgba(0,220,255,0)')
+      grad.addColorStop(1,'rgba(0,220,255,0.07)')
+      ctx.fillStyle=grad
+      ctx.beginPath();ctx.arc(cx,cy,LOCAL_RADIUS,0,Math.PI*2);ctx.fill()
+      ctx.strokeStyle='rgba(0,220,255,0.18)';ctx.lineWidth=1.5
+      ctx.setLineDash([6,6]);ctx.beginPath();ctx.arc(cx,cy,LOCAL_RADIUS,0,Math.PI*2);ctx.stroke()
+      ctx.setLineDash([]);ctx.restore()
+    }
+    drawBubble(player, pIsSlowmo)
+    drawBubble(enemy,  eIsSlowmo)
+  }
+
   // level-specific animated elements
   if(currentLevel===1){ for(let c of clouds){c.update(dt);c.draw()} }
   if(currentLevel===3){ for(let a of aliens){a.update(dt);a.draw()} }
@@ -1521,12 +2078,37 @@ function loop(now){
     // Guest: no position prediction — position comes from host snapshots
     // Only update bullets/particles locally for smooth rendering between snapshots
     for(let b of bullets) b.update(dt)
+    bullets = bullets.filter(b => b.bounces < 10)
     for(let p of particles) p.update(dt)
     particles = particles.filter(p=>p.life>0)
     for(let h of flyingHats) h.update(dt)
     for(let g of flyingGuns) g.update(dt)
+    // guest updates own crouch state locally
+    if (enemy && !enemy.dead) enemy.crouching = !!(keys['KeyS'] && enemy.onGround)
+    // guest auto-fire — blocked when crouching with hat
+    if (mouseDown && !gameOver && canShoot(enemy)) {
+      autoFireTimer -= dt
+      if (autoFireTimer <= 0) {
+        autoFireTimer = AUTO_FIRE_DELAY
+        if (mp.ws && mp.ws.readyState === 1) mp.ws.send(JSON.stringify({ type: 'shoot' }))
+      }
+    } else if (!mouseDown) {
+      autoFireTimer = 0
+    }
   } else {
     // Host (or single player): run full physics
+
+    // auto-fire while mouse held
+    if (mouseDown && !gameOver && canShoot(player)) {
+      autoFireTimer -= dt
+      if (autoFireTimer <= 0) {
+        autoFireTimer = AUTO_FIRE_DELAY
+        shoot(player, 'player')
+      }
+    } else if (!mouseDown) {
+      autoFireTimer = 0
+    }
+
     // MP host: apply guest inputs to enemy instead of AI
     if (mp.connected && mp.role === 'host' && enemy) {
       enemy.angle  = mp.guestAngle
@@ -1537,6 +2119,7 @@ function loop(now){
         if (gk['KeyA']||gk['ArrowLeft'])  { enemy.x -= 4*dt*timeScale; enemy.moving = true }
         if (gk['KeyD']||gk['ArrowRight']) { enemy.x += 4*dt*timeScale; enemy.moving = true }
         if ((gk['Space']||gk['ArrowUp']) && enemy.onGround) { enemy.vy = -13; enemy.onGround = false }
+        enemy.crouching = !!(gk['KeyS'] && enemy.onGround)
         if (enemy.moving){ enemy.walkTimer+=dt*timeScale; enemy.walkFrame=enemy.walkTimer*0.2 }
         enemy.vy+=0.65*dt*timeScale; enemy.y+=enemy.vy*dt*timeScale
         if(enemy.y>=SPRITE_GROUND){enemy.y=SPRITE_GROUND;enemy.vy=0;enemy.onGround=true}
@@ -1570,23 +2153,33 @@ function loop(now){
   bullets=bullets.filter((b,idx)=>{
     if(dead.has(idx))return false
     b.update(dt)
+    if(b.bounces>=10) return false  // destroy after too many bounces
     if(!gameOver){
-      // hat hit check — hat zone: above py, roughly crown area
+      // hat hit check — zone shifts when crouching
       if(b.owner!=='player'&&player.hats&&player.hats.length>0){
-        let hp=player, hx=hp.x, hy=hp.y
-        if(b.x>hx&&b.x<hx+hp.w&&b.y>hy-18&&b.y<hy+2){
+        let hp=player, hx=hp.x
+        // crouching: hat brim at GROUND-5, crown 16px above; standing: brim at hy, crown at hy-14
+        let hatTop, hatBot
+        if(hp.crouching){ hatTop=GROUND-15-16; hatBot=GROUND-15+5 }
+        else { hatTop=hp.y-18; hatBot=hp.y+5 }
+        if(b.x>hx&&b.x<hx+hp.w&&b.y>hatTop&&b.y<hatBot){
           let topP=player.hats.pop()
-          flyingHats.push(new FlyingHat(hx,hy-14,topP,b.dx))
-          for(let k=0;k<6;k++)particles.push(new Particle(hx+16,hy-8,'spark','#FFD700'))
+          let spawnY=hp.crouching ? GROUND-15-14 : hp.y-14
+          flyingHats.push(new FlyingHat(hx,spawnY,topP,b.dx))
+          for(let k=0;k<6;k++)particles.push(new Particle(hx+16,spawnY+6,'spark','#FFD700'))
           return false
         }
       }
       if(b.owner!=='enemy'&&enemy.hats&&enemy.hats.length>0){
-        let hp=enemy, hx=hp.x, hy=hp.y
-        if(b.x>hx&&b.x<hx+hp.w&&b.y>hy-18&&b.y<hy+2){
+        let hp=enemy, hx=hp.x
+        let hatTop, hatBot
+        if(hp.crouching){ hatTop=GROUND-15-16; hatBot=GROUND-15+5 }
+        else { hatTop=hp.y-18; hatBot=hp.y+5 }
+        if(b.x>hx&&b.x<hx+hp.w&&b.y>hatTop&&b.y<hatBot){
           let topP=enemy.hats.pop()
-          flyingHats.push(new FlyingHat(hx,hy-14,topP,b.dx))
-          for(let k=0;k<6;k++)particles.push(new Particle(hx+16,hy-8,'spark','#cc4444'))
+          let spawnY=hp.crouching ? GROUND-15-14 : hp.y-14
+          flyingHats.push(new FlyingHat(hx,spawnY,topP,b.dx))
+          for(let k=0;k<6;k++)particles.push(new Particle(hx+16,spawnY+6,'spark','#cc4444'))
           return false
         }
       }
@@ -1642,8 +2235,32 @@ function loop(now){
   if(slowmoGlowAlpha>0) for(let b of bullets) b.drawSlowmoHalo()
   for(let b of bullets)b.draw()
 
-  if(isSlowmo){ctx.strokeStyle='rgba(0,220,255,0.25)';ctx.lineWidth=8;ctx.strokeRect(4,4,W-8,H-8)}
+  if(isSlowmo && slowMode==='global'){ctx.strokeStyle='rgba(0,220,255,0.25)';ctx.lineWidth=8;ctx.strokeRect(4,4,W-8,H-8)}
   drawHUD()
+  // big countdown digits + round scores drawn on canvas
+  if(_countdownVal > 0){
+    let sz = Math.min(W,H)*0.35
+    ctx.save()
+    ctx.font=`bold ${sz}px monospace`
+    ctx.textAlign='center'
+    ctx.fillStyle='rgba(255,215,0,0.12)'
+    ctx.fillText(_countdownVal, W/2, H/2+sz*0.35)
+    ctx.strokeStyle='rgba(255,215,0,0.45)'
+    ctx.lineWidth=3
+    ctx.strokeText(_countdownVal, W/2, H/2+sz*0.35)
+    ctx.restore()
+    // round winner label top-centre
+    let labelY = H*0.18
+    ctx.save()
+    ctx.textAlign='center'; ctx.font='bold 28px monospace'
+    let winLabel = _roundWinner==='player' ? `🤠 ${playerName} WINS` : _roundWinner==='enemy' ? `🔫 ${enemyName} WINS` : 'DEAD HEAT'
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(W/2-220, labelY-30, 440, 40)
+    ctx.fillStyle=_roundWinner==='player'?'#FFD700':_roundWinner==='enemy'?'#ff4422':'#aaa'
+    ctx.fillText(winLabel, W/2, labelY)
+    ctx.restore()
+  }
+  // draw confetti over everything when match is over
+  if(confettiParticles.length>0) drawConfetti()
   // custom crosshair
   if(mouseX||mouseY){
     let cx=mouseX,cy=mouseY,r=12,gap=4,len=8
@@ -1660,31 +2277,53 @@ function loop(now){
     ctx.beginPath();ctx.arc(cx,cy,1.5,0,Math.PI*2);ctx.fill()
     ctx.restore()
   }
-  window._loopId = requestAnimationFrame(loop)
 }
 
 // ── START LEVEL ──────────────────────────────────────────────
 function startGame(level, isRetry=false, skipNetSync=false){
   currentLevel=level
   levelSel.style.display='none'
+  document.getElementById('round-screen').style.display='none'
+  document.getElementById('final-screen').style.display='none'
+  stopConfetti()
+  ui.style.display='none'
+  // restore level cards in case they were greyed out (guest returning from menu)
+  document.querySelectorAll('.level-card').forEach(c=>{ c.style.pointerEvents=''; c.style.opacity='' })
   bullets=[];particles=[];flashes=[];obstacles=[];clouds=[];aliens=[];flyingHats=[];flyingGuns=[];bloodDrops=[];bloodStains=[];bloodZones=[]
   _lastParticleCount = 0
   timeScale=1;slowEnergy=1;isSlowmo=false;gameOver=false;slowmoGlowAlpha=0
+  pSlowEnergy=1;pIsSlowmo=false;eSlowEnergy=1;eIsSlowmo=false
+  if(!isRetry) roundNum++
 
   if(!isRetry){
-    // Host generates seed; guest receives it via start_level message before startGame is called
-    if(!mp.connected || mp.role === 'host'){
-      mp.currentSeed = Math.floor(Math.random() * 0xFFFFFFFF)
+    // Only randomise palettes/names on first round of a match (or when roundNum resets to 1)
+    if(roundNum === 1){
+      // Host generates seed; guest receives it via start_level message before startGame is called
+      if(!mp.connected || mp.role === 'host'){
+        mp.currentSeed = Math.floor(Math.random() * 0xFFFFFFFF)
+      }
+      seedRng(mp.currentSeed || 12345)
+      randomisePalettes()
+      playerName=PLAYER_NAMES[Math.floor(seededRand()*PLAYER_NAMES.length)]
+      enemyName=ENEMY_NAMES[Math.floor(seededRand()*ENEMY_NAMES.length)]
+    } else {
+      // subsequent rounds: re-seed for obstacle/cloud layout only, keep palettes & names
+      seedRng(mp.currentSeed || 12345)
     }
-    seedRng(mp.currentSeed || 12345)
-    randomisePalettes()
-    playerName=PLAYER_NAMES[Math.floor(seededRand()*PLAYER_NAMES.length)]
-    enemyName=ENEMY_NAMES[Math.floor(seededRand()*ENEMY_NAMES.length)]
     // hairStyle is picked inside Player/Enemy constructor via seededRand — RNG state continues here
   }
 
+  // Save hair styles and palettes from round 1 to reuse in subsequent rounds
+  let savedPlayerHair = (roundNum > 1 && player) ? player.hairStyle : null
+  let savedEnemyHair  = (roundNum > 1 && enemy)  ? enemy.hairStyle  : null
+
   player=new Player(150,   1, playerPalette)
   enemy =new Enemy(W-200, -1, enemyPalette)
+
+  if(roundNum > 1){
+    if(savedPlayerHair !== null) player.hairStyle = savedPlayerHair
+    if(savedEnemyHair  !== null) enemy.hairStyle  = savedEnemyHair
+  }
 
   if(level===1){
     clouds=[
@@ -1743,12 +2382,336 @@ function restartLevel(){
   startGame(currentLevel, true)
 }
 function endGame(text){
-  if(gameOver)return;gameOver=true
+  if(gameOver)return; gameOver=true
   if(player&&enemy&&player.dead&&enemy.dead) text='DEAD HEAT'
-  resultEl.textContent=text;ui.style.display='block'
+
+  // ── SCORE CALCULATION ──────────────────────────────────────
+  // Determine win/loss from host perspective (player = host/offline)
+  let playerWon = text==='VICTORY'
+  let enemyWon  = text==='DEFEAT'
+  let isDraw    = text==='DEAD HEAT'
+
+  let enemyHatCount  = enemy  ? enemy.hats.length  : 1
+  let playerHatCount = player ? player.hats.length : 1
+
+  let pts = 0
+  if(playerWon) pts = 1
+  // +1 for wearing 2 hats (any outcome)
+  if(playerHatCount >= 2) pts += 1
+
+  let ePts = 0
+  if(enemyWon) ePts = 1
+  // +1 for wearing 2 hats (any outcome)
+  if(enemyHatCount >= 2) ePts += 1
+
+  scorePlayer += pts
+  scoreEnemy  += ePts
+
+  // ── SYNC TO GUEST ──────────────────────────────────────────
   if(mp.connected && mp.role==='host' && mp.ws?.readyState===1){
-    let guestResult = text==='DEAD HEAT' ? 'DEAD HEAT' : (text==='VICTORY' ? 'DEFEAT' : 'VICTORY')
-    mp.ws.send(JSON.stringify({type:'game_over', result: guestResult}))
+    let guestResult = isDraw ? 'DEAD HEAT' : (playerWon ? 'DEFEAT' : 'VICTORY')
+    mp.ws.send(JSON.stringify({
+      type:'round_over',
+      result: guestResult,
+      round: roundNum,
+      scoreHost: scorePlayer,
+      scoreGuest: scoreEnemy,
+      pts, ePts
+    }))
+  }
+
+  // Show round screen or final
+  if(roundNum >= TOTAL_ROUNDS){
+    setTimeout(()=>showFinalScreen(), 900)
+  } else {
+    setTimeout(()=>showRoundScreen(text, pts, ePts), 900)
+  }
+}
+
+// ── ROUND SCREEN ──────────────────────────────────────────────
+let _countdownVal = 0   // drawn on canvas as big number overlay
+let _roundWinner = null // 'player','enemy','draw'
+
+function showRoundScreen(resultText, ptsEarned, ePtsEarned){
+  document.getElementById('round-screen').style.display='flex'
+  ui.style.display='none'
+
+  // start dance for winner
+  _roundWinner = resultText==='VICTORY' ? 'player' : resultText==='DEFEAT' ? 'enemy' : 'draw'
+  // no dance between rounds
+
+  // auto-countdown 3→2→1 then start next round on same level
+  let count = 3
+  _countdownVal = count
+
+  const tick = setInterval(()=>{
+    count--
+    _countdownVal = count
+    if(count <= 0){
+      clearInterval(tick)
+      _countdownVal = 0
+      document.getElementById('round-screen').style.display='none'
+      if(player) player.isDancing=false
+      if(enemy)  enemy.isDancing=false
+      // host / offline starts next round
+      if(!mp.connected || mp.role === 'host'){
+        if(mp.connected && mp.ws?.readyState===1){
+          mp.currentSeed = Math.floor(Math.random()*0xFFFFFFFF)
+          mp.ws.send(JSON.stringify({type:'next_round', level:currentLevel, seed:mp.currentSeed}))
+        }
+        startGame(currentLevel, false, false)
+      }
+    }
+  }, 1000)
+}
+
+// ── FINAL SCREEN ──────────────────────────────────────────────
+let confettiParticles = []
+let confettiRaf = null
+
+function showFinalScreen(){
+  document.getElementById('round-screen').style.display='none'
+  ui.style.display='none'
+
+  let playerWins = scorePlayer > scoreEnemy
+  let tie        = scorePlayer === scoreEnemy
+  const fsLabel = document.getElementById('fs-label')
+  const fsName  = document.getElementById('fs-name')
+  if(tie){
+    if(fsLabel) fsLabel.style.display='none'
+    fsName.textContent = 'DEAD HEAT'
+    fsName.style.color = '#FFD700'
+    fsName.classList.remove('is-draw')
+  } else {
+    if(fsLabel) fsLabel.style.display=''
+    fsName.textContent = playerWins ? playerName : enemyName
+    fsName.style.color = playerWins ? '#FFD700' : '#ff4422'
+    fsName.classList.remove('is-draw')
+  }
+  document.getElementById('fs-sub').textContent = `${scorePlayer} — ${scoreEnemy}`
+
+  document.getElementById('final-screen').style.display='flex'
+
+  // dance: only the winner, only if alive
+  if(!tie){
+    let dancer = playerWins ? player : enemy
+    if(dancer && !dancer.dead){ dancer.isDancing=true; dancer._danceT=0 }
+  }
+
+  // confetti only if there's a winner
+  if(!tie) startConfetti()
+
+  // sync to guest
+  if(mp.connected && mp.role==='host' && mp.ws?.readyState===1){
+    mp.ws.send(JSON.stringify({type:'match_over', scoreHost:scorePlayer, scoreGuest:scoreEnemy}))
+  }
+}
+
+function drawPodium(playerWins, tie){
+  const c  = document.getElementById('podium-canvas')
+  const cx = c.getContext('2d')
+  const CW=420, CH=220
+  cx.clearRect(0,0,CW,CH)
+
+  // podium blocks
+  let blocks = tie
+    ? [{x:150,w:120,h:100,col:'#888',label:'?',pts:scorePlayer,name:'TIE'}]
+    : playerWins
+      ? [{x:30, w:120,h:70, col:'#888',  label:'2nd',pts:scoreEnemy,  name:enemyName, isLoser:true},
+         {x:270,w:120,h:100,col:'#FFD700',label:'1st',pts:scorePlayer, name:playerName,isWinner:true}]
+      : [{x:30, w:120,h:100,col:'#FFD700',label:'1st',pts:scoreEnemy,  name:enemyName, isWinner:true},
+         {x:270,w:120,h:70, col:'#888',   label:'2nd',pts:scorePlayer, name:playerName,isLoser:true}]
+
+  for(let b of blocks){
+    // podium block
+    cx.fillStyle=b.col
+    cx.fillRect(b.x, CH-b.h, b.w, b.h)
+    // shine
+    cx.fillStyle='rgba(255,255,255,0.08)'
+    cx.fillRect(b.x+2, CH-b.h+2, b.w-4, 6)
+    // label on block
+    cx.fillStyle = b.isWinner?'#0d0820':'#eee'
+    cx.font='bold 14px monospace'
+    cx.textAlign='center'
+    cx.fillText(b.label, b.x+b.w/2, CH-b.h/2+5)
+
+    // tiny pixel figure on podium
+    let fx=b.x+b.w/2, fy=CH-b.h-2
+    drawTinyFigure(cx, fx, fy, b.isWinner)
+
+    // name below figure
+    cx.fillStyle=b.isWinner?'#FFD700':'#aaa'
+    cx.font='bold 11px monospace'
+    cx.textAlign='center'
+    cx.fillText(b.name, b.x+b.w/2, CH-b.h-68)
+    // score
+    cx.fillStyle='#888'
+    cx.font='10px monospace'
+    cx.fillText(b.pts+' pts', b.x+b.w/2, CH-b.h-55)
+  }
+  cx.textAlign='left'
+}
+
+function drawTinyFigure(cx, x, y, isWinner){
+  let col = isWinner ? '#FFD700' : '#888'
+  let armAngle = isWinner ? -0.9 : 0   // winner raises arms
+  cx.save()
+  cx.translate(x, y)
+  // hat
+  cx.fillStyle = isWinner ? '#8b6914' : '#555'
+  cx.fillRect(-6,-46,12,10)
+  cx.fillRect(-8,-38,16,4)
+  // head
+  cx.fillStyle = '#f5c88a'
+  cx.fillRect(-5,-34,10,10)
+  // body
+  cx.fillStyle = col
+  cx.fillRect(-5,-24,10,14)
+  // arms
+  cx.save()
+  cx.translate(-5,-22)
+  cx.rotate(isWinner ? -0.7 : 0.2)
+  cx.fillStyle=col; cx.fillRect(-10,0,10,4)
+  cx.restore()
+  cx.save()
+  cx.translate(5,-22)
+  cx.rotate(isWinner ? 0.7 : -0.2)
+  cx.fillStyle=col; cx.fillRect(0,0,10,4)
+  cx.restore()
+  // legs
+  cx.fillStyle='#2a4080'
+  cx.fillRect(-5,-10,4,12)
+  cx.fillRect(1,-10,4,12)
+  cx.restore()
+}
+
+// ── CONFETTI ──────────────────────────────────────────────────
+function startConfetti(){
+  confettiParticles = []
+  for(let i=0;i<120;i++){
+    confettiParticles.push({
+      x: Math.random()*W, y: -20-Math.random()*200,
+      dx:(Math.random()-0.5)*3, dy:1.5+Math.random()*3,
+      rot:Math.random()*Math.PI*2, rotV:(Math.random()-0.5)*0.2,
+      w:8+Math.random()*8, h:5+Math.random()*5,
+      col:['#FFD700','#ff4422','#00eeff','#ff88cc','#88ff44'][Math.floor(Math.random()*5)],
+      life:1
+    })
+  }
+  // stop spawning new pieces after 4s, fade out over 1s
+  setTimeout(()=>{
+    confettiParticles.forEach(p=>{ p.fading=true })
+  }, 4000)
+
+  function tick(){
+    confettiParticles.forEach(p=>{
+      p.x+=p.dx; p.y+=p.dy; p.rot+=p.rotV; p.dy+=0.04
+      if(p.fading) p.life = Math.max(0, p.life-0.012)
+      else if(p.y>H+20){ p.y=-20; p.x=Math.random()*W; p.dy=1.5+Math.random()*2 }
+    })
+    confettiParticles = confettiParticles.filter(p=>p.life>0)
+    if(confettiParticles.length>0){
+      confettiRaf = requestAnimationFrame(tick)
+    } else {
+      confettiRaf = null
+    }
+  }
+  confettiRaf = requestAnimationFrame(tick)
+}
+
+function stopConfetti(){
+  if(confettiRaf){ cancelAnimationFrame(confettiRaf); confettiRaf=null }
+  confettiParticles=[]
+}
+
+function drawConfetti(){
+  for(let p of confettiParticles){
+    ctx.save()
+    ctx.translate(p.x,p.y); ctx.rotate(p.rot)
+    ctx.fillStyle=p.col; ctx.globalAlpha=0.85*p.life
+    ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h)
+    ctx.restore()
+  }
+  ctx.globalAlpha=1
+}
+
+// ── FANFARE (Web Audio) ───────────────────────────────────────
+function playFanfare(){
+  try{
+    const ac = new (window.AudioContext||window.webkitAudioContext)()
+    const notes=[
+      {f:523,t:0,   d:0.15},
+      {f:659,t:0.15,d:0.15},
+      {f:784,t:0.3, d:0.15},
+      {f:1047,t:0.45,d:0.4},
+      {f:784,t:0.55,d:0.1},
+      {f:1047,t:0.65,d:0.6},
+    ]
+    notes.forEach(n=>{
+      const osc=ac.createOscillator()
+      const gain=ac.createGain()
+      osc.connect(gain); gain.connect(ac.destination)
+      osc.type='square'
+      osc.frequency.value=n.f
+      gain.gain.setValueAtTime(0.18,ac.currentTime+n.t)
+      gain.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+n.t+n.d)
+      osc.start(ac.currentTime+n.t)
+      osc.stop(ac.currentTime+n.t+n.d+0.05)
+    })
+  }catch(e){}
+}
+
+// ── START MATCH (called from level-select) ────────────────────
+function startMatch(level){
+  scorePlayer=0; scoreEnemy=0; roundNum=0; matchActive=true
+  startGame(level, false, false)
+}
+
+// ── REMATCH ───────────────────────────────────────────────────
+function restartMatch(){
+  stopConfetti()
+  if(player) player.isDancing=false
+  if(enemy)  enemy.isDancing=false
+  document.getElementById('final-screen').style.display='none'
+  scorePlayer=0; scoreEnemy=0; roundNum=0
+  if(mp.connected && mp.role==='host' && mp.ws?.readyState===1){
+    mp.currentSeed = Math.floor(Math.random()*0xFFFFFFFF)
+    mp.ws.send(JSON.stringify({type:'rematch', level:currentLevel, seed:mp.currentSeed}))
+    startGame(currentLevel, false, false)
+  } else if(!mp.connected){
+    startGame(currentLevel, false, false)
+  }
+}
+
+function goToMenu(){
+  stopConfetti()
+  document.getElementById('round-screen').style.display='none'
+  document.getElementById('final-screen').style.display='none'
+  ui.style.display='none'
+  scorePlayer=0; scoreEnemy=0; roundNum=0; matchActive=false
+  gameOver=false
+  player=null; enemy=null
+  bullets=[];particles=[];flashes=[];obstacles=[];clouds=[];aliens=[];flyingHats=[];flyingGuns=[];bloodDrops=[];bloodStains=[];bloodZones=[]
+  timeScale=1;slowEnergy=1;isSlowmo=false;slowmoGlowAlpha=0
+  pSlowEnergy=1;pIsSlowmo=false;eSlowEnergy=1;eIsSlowmo=false
+  mpHideOverlay()
+  // MP guest — send disconnect signal, show level-select (readonly, just visual)
+  // MP host — show level-select to pick next level
+  // Offline — show level-select normally
+  if(mp.connected && mp.role==='guest'){
+    // guest can't pick level but we still show level-select as lobby screen
+    levelSel.style.display='flex'
+    // grey out cards to signal waiting for host
+    document.querySelectorAll('.level-card').forEach(c=>{
+      c.style.pointerEvents='none'; c.style.opacity='0.4'
+    })
+    mpShowOverlay('🔫 You are OUTLAW\nWaiting for host to start...')
+  } else {
+    // host or offline — fully interactive level-select
+    document.querySelectorAll('.level-card').forEach(c=>{
+      c.style.pointerEvents=''; c.style.opacity=''
+    })
+    levelSel.style.display='flex'
   }
 }
 
