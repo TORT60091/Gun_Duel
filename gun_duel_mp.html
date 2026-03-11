@@ -5,7 +5,7 @@
 <title>PIXEL DUEL</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { overflow:hidden; background:#0d0820; }
+body { overflow:hidden; background:#000; display:flex; align-items:center; justify-content:center; width:100vw; height:100vh; }
 canvas { display:block; cursor:none; }
 
 /* ── LEVEL SELECT ── */
@@ -112,6 +112,7 @@ canvas { display:block; cursor:none; }
 </style>
 </head>
 <body>
+<div id="game-container" style="position:relative;flex-shrink:0;">
 <canvas id="game"></canvas>
 
 <!-- LEVEL SELECT -->
@@ -175,6 +176,8 @@ canvas { display:block; cursor:none; }
   </div>
 </div>
 
+</div><!-- end game-container -->
+
 <script>
 const canvas  = document.getElementById('game')
 const ctx     = canvas.getContext('2d')
@@ -182,8 +185,18 @@ const ui      = document.getElementById('ui')
 const resultEl= document.getElementById('result')
 const levelSel= document.getElementById('level-select')
 ctx.imageSmoothingEnabled = false
-canvas.width  = window.innerWidth
-canvas.height = window.innerHeight
+{
+  const maxW = window.innerWidth
+  const maxH = window.innerHeight
+  // fit 16:9 within available space
+  let cw = maxW, ch = Math.round(maxW * 9 / 16)
+  if (ch > maxH) { ch = maxH; cw = Math.round(maxH * 16 / 9) }
+  canvas.width  = cw
+  canvas.height = ch
+  const gc = document.getElementById('game-container')
+  gc.style.width  = cw + 'px'
+  gc.style.height = ch + 'px'
+}
 
 const W = canvas.width
 const H = canvas.height
@@ -1635,13 +1648,13 @@ document.addEventListener('keydown',e=>{keys[e.code]=true})
 document.addEventListener('keyup',  e=>{keys[e.code]=false})
 let mouseX=0, mouseY=0
 canvas.addEventListener('mousemove',e=>{
-  mouseX=e.clientX; mouseY=e.clientY
+  mouseX=e.offsetX; mouseY=e.offsetY
   // Guest controls enemy (Outlaw), everyone else controls player (Billy)
   let target = (mp.connected && mp.role === 'guest') ? enemy : player
   if(!target) return
   let ax=target.x+(target.facing>0?target.w:0), ay=target.y+30
-  target.angle=Math.atan2(e.clientY-ay, e.clientX-ax)
-  target.facing=e.clientX>target.x+target.w/2?1:-1
+  target.angle=Math.atan2(e.offsetY-ay, e.offsetX-ax)
+  target.facing=e.offsetX>target.x+target.w/2?1:-1
 })
 let mouseDown = false
 let autoFireTimer = 0
@@ -2059,17 +2072,25 @@ function loop(now){
   if(currentLevel===3){ for(let a of aliens){a.update(dt);a.draw()} }
 
   if (mp.connected && mp.role === 'guest') {
-    // Guest: no position prediction — position comes from host snapshots
-    // Only update bullets/particles locally for smooth rendering between snapshots
+    // Guest: update own character locally for smooth movement + bubble
+    if (enemy && !enemy.dead) {
+      enemy.moving = false
+      if(keys['KeyA']||keys['ArrowLeft']) {enemy.x-=4*dt*timeScale;enemy.moving=true}
+      if(keys['KeyD']||keys['ArrowRight']){enemy.x+=4*dt*timeScale;enemy.moving=true}
+      if((keys['Space']||keys['ArrowUp'])&&enemy.onGround){enemy.vy=-13;enemy.onGround=false}
+      enemy.crouching = !!(keys['KeyS'] && enemy.onGround)
+      if(enemy.moving){enemy.walkTimer+=dt*timeScale;enemy.walkFrame=enemy.walkTimer*0.2}
+      enemy.vy+=0.65*dt*timeScale; enemy.y+=enemy.vy*dt*timeScale
+      if(enemy.y>=SPRITE_GROUND){enemy.y=SPRITE_GROUND;enemy.vy=0;enemy.onGround=true}
+      enemy.x=Math.max(0,Math.min(W-enemy.w,enemy.x))
+    }
+    // bullets/particles interpolated locally between snapshots
     for(let b of bullets) b.update(dt)
     bullets = bullets.filter(b => b.bounces < 10)
     for(let p of particles) p.update(dt)
     particles = particles.filter(p=>p.life>0)
     for(let h of flyingHats) h.update(dt)
     for(let g of flyingGuns) g.update(dt)
-    // guest updates own crouch state locally
-    if (enemy && !enemy.dead) enemy.crouching = !!(keys['KeyS'] && enemy.onGround)
-    // guest auto-fire — blocked when crouching with hat
     if (mouseDown && !gameOver && canShoot(enemy)) {
       autoFireTimer -= dt
       if (autoFireTimer <= 0) {
