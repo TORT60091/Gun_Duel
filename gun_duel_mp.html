@@ -1396,9 +1396,7 @@ function mpSendState() {
     flyingHats: flyingHats.map(h=>({x:h.x,y:h.y,dx:h.dx,dy:h.dy,spin:h.spin,P:h.P,onGround:h.onGround,spinSpeed:h.spinSpeed})),
     flyingGuns: flyingGuns.map(g=>({x:g.x,y:g.y,dx:g.dx,dy:g.dy,spin:g.spin,spinSpeed:g.spinSpeed})),
     go: gameOver, ts: timeScale, se: slowEnergy,
-    slowMode,
     pIsSlowmo, pSlowEnergy,
-    eIsSlowmo, eSlowEnergy,
     particles: newParticles
   }
   mp.ws.send(JSON.stringify({ type:'state', state }))
@@ -1459,21 +1457,16 @@ function mpApplyState(s) {
   slowEnergy = s.se
   isSlowmo = timeScale < 1
 
-  // sync slowMode from host
-  if (s.slowMode !== undefined && s.slowMode !== slowMode) setSlowMode(s.slowMode)
-
-  // local mode: host sends its pIsSlowmo/pSlowEnergy; guest owns its own eIsSlowmo/eSlowEnergy
-  if (s.slowMode === 'local' || slowMode === 'local') {
-    pIsSlowmo    = s.pIsSlowmo    ?? pIsSlowmo
-    pSlowEnergy  = s.pSlowEnergy  ?? pSlowEnergy
-    // guest updates its own eIsSlowmo/eSlowEnergy independently (done in guest updateSlowmo below)
+  // local mode: sync host's pIsSlowmo/pSlowEnergy from snapshot
+  if (slowMode === 'local') {
+    if (s.pIsSlowmo   !== undefined) pIsSlowmo   = s.pIsSlowmo
+    if (s.pSlowEnergy !== undefined) pSlowEnergy = s.pSlowEnergy
     isSlowmo = pIsSlowmo || eIsSlowmo
   } else {
-    // global: sync everything from host
     pIsSlowmo   = s.pIsSlowmo   ?? (timeScale < 1)
-    eIsSlowmo   = s.eIsSlowmo   ?? (timeScale < 1)
     pSlowEnergy = s.pSlowEnergy ?? slowEnergy
-    eSlowEnergy = s.eSlowEnergy ?? slowEnergy
+    eIsSlowmo   = isSlowmo
+    eSlowEnergy = slowEnergy
   }
 
   // Sync bullets — scale coords, preserve pathTrail and bounces
@@ -1543,8 +1536,8 @@ function mpNotifyLevelStart(level) {
   if (mp.role === 'host' && mp.ws?.readyState === 1) {
     mp.ws.send(JSON.stringify({ type: 'start_level', level, seed: mp.currentSeed, roundNum, scoreHost:scorePlayer, scoreGuest:scoreEnemy, slowMode }))
     // Begin sending state snapshots
-    if (mp.stateInterval) clearInterval(mp.stateInterval)
-    mp.stateInterval = setInterval(mpSendState, 16)  // ~60fps fallback
+    // State snapshots are sent every frame from the game loop
+    if (mp.stateInterval) { clearInterval(mp.stateInterval); mp.stateInterval = null }
   }
 }
 
@@ -2057,14 +2050,13 @@ function loop(now){
       if(!p || !isSlow) return
       let cx=p.x+p.w/2, cy=p.y+p.h/2
       ctx.save()
-      let grad=ctx.createRadialGradient(cx,cy,LOCAL_RADIUS*0.6,cx,cy,LOCAL_RADIUS)
-      grad.addColorStop(0,'rgba(0,220,255,0)')
-      grad.addColorStop(1,'rgba(0,220,255,0.07)')
-      ctx.fillStyle=grad
+      ctx.globalAlpha=0.06
+      ctx.fillStyle='#00ddff'
       ctx.beginPath();ctx.arc(cx,cy,LOCAL_RADIUS,0,Math.PI*2);ctx.fill()
-      ctx.strokeStyle='rgba(0,220,255,0.18)';ctx.lineWidth=1.5
+      ctx.globalAlpha=0.18
+      ctx.strokeStyle='#00ddff';ctx.lineWidth=1.5
       ctx.setLineDash([6,6]);ctx.beginPath();ctx.arc(cx,cy,LOCAL_RADIUS,0,Math.PI*2);ctx.stroke()
-      ctx.setLineDash([]);ctx.restore()
+      ctx.setLineDash([]);ctx.globalAlpha=1;ctx.restore()
     }
     drawBubble(player, pIsSlowmo)
     drawBubble(enemy,  eIsSlowmo)
